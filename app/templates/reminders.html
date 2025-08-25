@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reminder Übersicht | Touchpoint.ai</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Touchpoint.ai Logo" height="50">
+        </div>
+        <div class="user-icon">⏰</div>
+    </header>
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <a href="{{ url_for('index.index') }}">Home</a>
+        <a href="{{ url_for('emails.list_emails') }}">E-Mails</a>
+        <a href="{{ url_for('reminders.list_reminders') }}">Reminder</a>
+        <a href="{{ url_for('chats.list_chats') }}">Chats</a>
+        <a href="{{ url_for('customers.list_customers') }}">Customer</a>
+        <a href="{{ url_for('products.list_products') }}">Products</a>
+        <a href="{{ url_for('settings.index') }}">Settings</a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main">
+        <h2><span class="highlight">📌 Reminder Übersicht</span></h2>
+
+        <!-- Suche -->
+        <form method="get" action="{{ url_for('reminders.list_reminders') }}" class="ask-ai-container">
+            <input type="text" name="q" value="{{ search_term }}" placeholder="Search reminders...">
+            <button type="submit" class="ask-btn">Search</button>
+        </form>
+
+        <!-- Reminder Liste -->
+        <div class="email-list">
+            {% set waiting = reminders | selectattr("reason", "equalto", "waiting_for_reply") | list %}
+            {% set follow_up = reminders | selectattr("reason", "equalto", "follow_up") | list %}
+
+            {% if waiting %}
+                <h3>📩 Wartet auf Antwort</h3>
+                {% for r in waiting %}
+                <div class="email-preview email-wide">
+                    <a href="{{ url_for('reminders.reminder_detail', email_id=r.email_id) }}" class="email-link">
+                        <div class="email-header">
+                            <div>
+                                <strong>Last Messenger:</strong> {{ r.customer.name }} &lt;{{ r.customer.email }}&gt;<br>
+                                <strong>Subject:</strong> {{ r.subject }}
+                            </div>
+                            <div class="email-timestamp">
+                                {{ r.timestamp | datetimeformat }}
+                            </div>
+                        </div>
+                        <div class="email-body">
+                            {{ r.preview[:300] }}{% if r.preview|length > 300 %}...{% endif %}
+                        </div>
+                    </a>
+                </div>
+                {% endfor %}
+            {% endif %}
+
+            {% if follow_up %}
+                <h3>⏳ Nochmal nachhaken</h3>
+                {% for r in follow_up %}
+                <div class="email-preview email-wide">
+                    <a href="{{ url_for('reminders.reminder_detail', email_id=r.email_id) }}" class="email-link">
+                        <div class="email-header">
+                            <div>
+                                <strong>Last Messenger:</strong> {{ r.customer.name }} &lt;{{ r.customer.email }}&gt;<br>
+                                <strong>Subject:</strong> {{ r.subject }}
+                            </div>
+                            <div class="email-timestamp">
+                                {{ r.timestamp | datetimeformat }}
+                            </div>
+                        </div>
+                        <div class="email-body">
+                            {{ r.preview[:300] }}{% if r.preview|length > 300 %}...{% endif %}
+                        </div>
+                    </a>
+                </div>
+                {% endfor %}
+            {% endif %}
+
+            {% if not waiting and not follow_up %}
+                <p>Keine offenen Reminders.</p>
+            {% endif %}
+        </div>
+
+
+        <!-- Pagination -->
+        <div class="pagination">
+            {% if page > 1 %}
+                <a href="{{ url_for('reminders.list_reminders', page=page-1, q=search_term) }}" class="ask-btn">⬅ Prev</a>
+            {% endif %}
+            {% if has_next %}
+                <a href="{{ url_for('reminders.list_reminders', page=page+1, q=search_term) }}" class="ask-btn">Next ➡</a>
+            {% endif %}
+        </div>
+    </main>
+</body>
+</html>

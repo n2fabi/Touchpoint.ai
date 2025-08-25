@@ -1,0 +1,251 @@
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: #2b2b2b;
+    color: white;
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    grid-template-rows: 60px 1fr;
+    grid-template-areas:
+        "header header"
+        "sidebar main";
+    height: 100vh; /* Füllt den gesamten Bildschirm */
+}
+
+.header {
+    grid-area: header;
+    background: black;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+}
+
+.logo {
+    font-weight: bold;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+}
+
+.logo-ai {
+    display: flex;
+    align-items: center;
+    margin-left: 3px;
+    color: white;
+}
+
+.tagline {
+    font-size: 0.8rem;
+    color: #ccc;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.user-icon {
+    font-size: 1.5rem;
+}
+
+.sidebar {
+    grid-area: sidebar;
+    background: #3a3a3a;
+    display: flex;
+    flex-direction: column;
+    padding-top: 20px;
+    height: 100%;
+}
+
+.sidebar a {
+    color: white;
+    padding: 12px 20px;
+    text-decoration: none;
+    font-size: 1rem;
+}
+
+.sidebar a:hover {
+    background: #505050;
+}
+
+.main {
+    grid-area: main;
+    padding: 20px;
+    background: #d3d3d3;
+    color: black;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.highlight {
+    font-weight: bold;
+    color: black;
+}
+
+.chart-container {
+    background: transparent;
+    padding: 20px;
+    border-radius: 10px;
+    max-width: 600px;
+}
+
+.ask-ai-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.ask-ai-container input {
+    flex: 1;
+    padding: 8px;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    color: black;
+}
+
+.ask-ai-container input::placeholder {
+    color: #888;
+}
+
+.ask-btn:hover {
+    background-color: darkred;
+}
+:root {
+    --bordeaux: #800020;
+}
+
+.ask-btn {
+    background-color: var(--bordeaux);
+    border: none;
+    color: white;
+    padding: 8px 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.ask-btn:hover {
+    background-color: #5e0017;
+}
+
+.email-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+.email-preview {
+    background: white;
+    color: black;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 8px; /* minimaler Abstand zwischen Nachrichten */
+}
+
+.email-header {
+    background: #eee;
+    padding: 8px;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+    display: flex; /* Flex für linke und rechte Seite */
+    justify-content: space-between; /* Datum rechts */
+    align-items: flex-start;
+}
+
+.email-body p {
+    margin-top: 0;        /* kein zusätzlicher Abstand am Anfang */
+    margin-bottom: 1em;   /* Lesbarer Abstand nach unten */
+    line-height: 1.5;
+}
+
+/* Links neutral gestalten, Box bleibt klickbar */
+.email-link {
+    color: inherit;
+    text-decoration: none;
+    display: block;
+}
+
+.email-link:hover {
+    background-color: #f5f5f5; /* optionaler Hover-Effekt */
+}
+
+
+.email-wide {
+    grid-column: span 2;
+}
+
+#edit-textarea {
+    width: 100%;
+    min-height: 200px;   /* macht es hoch genug zum Schreiben */
+    box-sizing: border-box;
+    padding: 0.5rem;
+    font-family: inherit;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+}
+
+.back-btn {
+    display: inline-block;
+    margin-top: 15px;
+}
+
+.main {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 60px); /* Platz für Header */
+            padding: 1rem;
+        }
+
+.chat-window {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 1rem; /* Platz für Textfeld */
+}
+
+.chat-bubble {
+    padding: 10px 15px;
+    border-radius: 15px;
+    max-width: 70%;
+}
+.incoming {
+    background-color: #f1f1f1;
+    align-self: flex-start;
+}
+.outgoing {
+    background-color: #d1e7ff;
+    align-self: flex-end;
+}
+
+.chat-input-container {
+    display: flex;
+    gap: 10px;
+    margin-top: auto; /* immer unten */
+}
+.chat-input-container textarea {
+    flex: 1 1 auto;
+    resize: none;
+    height: 50px;
+    padding: 10px;
+    border-radius: 10px;
+}
+.chat-input-container button {
+    padding: 0 15px;
+    border-radius: 10px;
+}
+
+/* Mobile: untereinander */
+@media (max-width: 768px) {
+    .email-container {
+        grid-template-columns: 1fr;
+    }
+    .email-wide {
+        grid-column: span 1;
+    }
+}

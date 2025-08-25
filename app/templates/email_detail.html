@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ email.subject }} | Touchpoint.ai</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Touchpoint.ai Logo" height="50">
+        </div>
+        <div class="user-icon">📧</div>
+    </header>
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <a href="{{ url_for('index.index') }}">Home</a>
+        <a href="{{ url_for('emails.list_emails') }}">E-Mails</a>
+        <a href="{{ url_for('reminders.list_reminders') }}">Reminder</a>
+        <a href="{{ url_for('chats.list_chats') }}">Chats</a>
+        <a href="{{ url_for('customers.list_customers') }}">Customer</a>
+        <a href="{{ url_for('products.list_products') }}">Products</a>
+        <a href="{{ url_for('settings.index') }}">Settings</a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main">
+        <h2><span class="highlight">{{ email.subject }}</span></h2>
+        <!-- E-Mail Detail -->
+        <div class="email-detail" style="position: relative;">
+            <p><strong>From:</strong> {{ email.from.name }} &lt;{{ email.from.email }}&gt;</p>
+            <p><strong>To:</strong> {{ email.to.name }} &lt;{{ email.to.email }}&gt;</p>
+            <p><strong>Date:</strong> {{ email.timestamp }}</p>
+            <hr>
+            <div class="email-body">
+                {{ email.message | nl2p }}
+            </div>
+
+            <!-- Answer this Email Button -->
+            <form method="POST" class="ask-ai-container" style="margin-top: 1rem;">
+                <input type="hidden" name="email_id" value="{{ email.id }}">
+                <button type="submit" name="action" value="answer_email" class="ask-btn">
+                    Answer this E-Mail
+                </button>
+            </form>
+        </div>
+
+        <!-- Response Box unterhalb der E-Mail -->
+        <div class="response-box" style="margin-top:1rem;">
+            {% if answer and answer.email_id == email.id %}
+                <!-- Preview -->
+                <div class="email-preview email-wide" id="generated-preview">
+                    <div class="email-header">
+                        <div><strong>To:</strong> {{ answer.to }}</div>
+                        <div><strong>Subject:</strong> {{ answer.subject }}</div>
+                    </div>
+                    <div class="email-body">
+                        {{ answer.body_text | replace('\n', '<br>') | safe }}
+                    </div>
+                </div>
+
+                <!-- Hidden edit form -->
+                <form method="POST" id="edit-form" class="ask-ai-container" style="display:none; margin-top:1rem;">
+                    <textarea name="edited_message" id="edit-textarea">{{ answer.body_text }}</textarea>
+                    <input type="hidden" name="email_id" value="{{ email.id }}">
+                    <button type="submit" name="action" value="rewrite_email" class="ask-btn">
+                        Rewrite
+                    </button>
+                </form>
+
+                <!-- Action Buttons -->
+                <div class="email-actions" style="margin-top:0.5rem;">
+                    <button type="button" id="edit-btn" class="ask-btn">✏ Edit</button>
+
+                    <!-- Send Button -->
+                    <form method="POST" style="display:inline;">
+                        <input type="hidden" name="email_id" value="{{ answer }}">
+                        <button type="submit" name="action" value="send_email" class="ask-btn">
+                            📤 Send
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+
+        <a href="{{ url_for('emails.list_emails') }}" class="ask-btn back-btn">⬅ Back to Inbox</a>
+    </main>
+
+    <script>
+        // toggle between preview and edit mode
+        document.addEventListener("DOMContentLoaded", () => {
+            const editBtn = document.getElementById("edit-btn");
+            const preview = document.getElementById("generated-preview");
+            const editForm = document.getElementById("edit-form");
+
+            if(editBtn){
+                editBtn.addEventListener("click", () => {
+                    preview.style.display = "none";
+                    editForm.style.display = "block";
+                });
+            }
+        });
+    </script>
+</body>
+</html>

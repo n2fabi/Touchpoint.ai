@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chats | Touchpoint.ai</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Touchpoint.ai Logo" height="50">
+        </div>
+        <div class="user-icon">📧</div>
+    </header>
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <a href="{{ url_for('index.index') }}">Home</a>
+        <a href="{{ url_for('emails.list_emails') }}">E-Mails</a>
+        <a href="{{ url_for('reminders.list_reminders') }}">Reminder</a>
+        <a href="{{ url_for('chats.list_chats') }}">Chats</a>
+        <a href="{{ url_for('customers.list_customers') }}">Customer</a>
+        <a href="{{ url_for('products.list_products') }}">Products</a>
+        <a href="{{ url_for('settings.index') }}">Settings</a>
+    </nav>
+
+    <main class="main">
+        <h2><span class="highlight">Chats</span></h2>
+        <div class="email-list">
+            {% for chat in chats %}
+                <div class="email-preview email-wide">
+                    <a href="{{ url_for('chats.view_chat', contact_email=chat.email) }}" class="email-link">
+                        <div class="email-header">
+                            <strong>{{ chat.name }}</strong> &lt;{{ chat.email }}&gt;
+                        </div>
+                        <div class="email-body">
+                            {{ chat.last_summary }}
+                        </div>
+                    </a>
+                </div>
+            {% else %}
+                <p>No chats yet.</p>
+            {% endfor %}
+        </div>
+    </main>
+</body>
+</html>

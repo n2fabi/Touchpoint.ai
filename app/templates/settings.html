@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Touchpoint.ai - Settings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Touchpoint.ai Logo" height="50">
+        </div>
+        <div class="user-icon">👤</div>
+    </header>
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <a href="{{ url_for('index.index') }}">Home</a>
+        <a href="{{ url_for('emails.list_emails') }}">E-Mails</a>
+        <a href="{{ url_for('reminders.list_reminders') }}">Reminder</a>
+        <a href="{{ url_for('chats.list_chats') }}">Chats</a>
+        <a href="{{ url_for('customers.list_customers') }}">Customer</a>
+        <a href="{{ url_for('products.list_products') }}">Products</a>
+        <a href="{{ url_for('settings.index') }}">Settings</a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main">
+        <h2>⚙️ Einstellungen</h2>
+        <p>Hier kannst du deine Einstellungen anpassen. (Platzhalter)</p>
+    </main>
+</body>
+</html>

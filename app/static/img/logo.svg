@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="50" viewBox="0 0 220 50">
+    <text x="0" y="35" font-family="Arial, sans-serif" font-size="32" fill="white">TOUCHPOINT.A</text>
+    <text x="205" y="35" font-family="Arial, sans-serif" font-size="32" fill="white">I</text>
+    <circle cx="218" cy="22" r="6" fill="#800020"/>
+    <path d="M218 17c-1.5 0-3 1.2-3 3s1 3 2 3c1.5 0 2-1 2-3s-1.5-3-3-3z" fill="none" stroke="white" stroke-width="0.5"/>
+</svg>
