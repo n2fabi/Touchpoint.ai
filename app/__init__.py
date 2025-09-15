@@ -1,7 +1,8 @@
 from flask import Flask
 from db import init_db
 from config import Config
-from blueprints.reminders import init_reminder
+from background_tasks import init_background, sidebar_cache, refresh_emails, refresh_reminders
+from flask_session import Session
     
 
 # Blueprint imports are intentionally minimal; the files exist under blueprints/
@@ -13,6 +14,13 @@ def create_app(config_object=None):
     app = Flask(__name__)
     app.secret_key = Config.SECRET_KEY
 
+    # Session-Konfiguration (serverseitig)
+    app.config["SESSION_TYPE"] = "filesystem"   # Alternativ: "redis", "mongodb"
+    app.config["SESSION_PERMANENT"] = False     # Session endet, wenn Browser geschlossen wird
+    app.config["SESSION_USE_SIGNER"] = True     # Signiert Session-ID für mehr Sicherheit
+    app.config["SESSION_FILE_DIR"] = "./flask_session"  # Lokaler Ordner für Filesystem-Sessions
+    Session(app)  # Initialisiert die Session-Erweiterung
+
     # Load config from object or environment
     if config_object:
         app.config.from_object(config_object)
@@ -23,7 +31,6 @@ def create_app(config_object=None):
     # Initialize DB (PyMongo wrapper lives in app/db.py)
     print("Initializing database...", flush=True)  # Debugging output
     init_db(app)
-    init_reminder(app)
 
     # Register blueprints
     from blueprints.customers import customers_bp
@@ -45,6 +52,19 @@ def create_app(config_object=None):
     from filters import datetimeformat, nl2p
     app.add_template_filter(datetimeformat, "datetimeformat")
     app.add_template_filter(nl2p, "nl2p")
+
+    # Initialize background tasks (scheduler)
+    init_background(app)
+    #initial run
+    refresh_emails(app)
+    refresh_reminders(app)
+
+    @app.context_processor
+    def inject_sidebar_data():
+        print("inject_sidebar_data called!", sidebar_cache, flush=True)
+        return dict(sidebar_unread=sidebar_cache["unread_count"],
+                    sidebar_reminder=sidebar_cache["reminders_count"],
+                    sidebar_last_update=sidebar_cache["last_update"])
 
     return app
 

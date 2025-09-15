@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>E-Mail Postfach | Touchpoint.ai</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
+    </head>
 <body>
     <!-- Header -->
     <header class="header">
@@ -18,13 +18,18 @@
     <!-- Sidebar -->
     <nav class="sidebar">
         <a href="{{ url_for('index.index') }}">Home</a>
-        <a href="{{ url_for('emails.list_emails') }}">E-Mails</a>
-        <a href="{{ url_for('reminders.list_reminders') }}">Reminder</a>
+        <a href="{{ url_for('emails.list_emails') }}">
+            E-Mails{% if sidebar_unread > 0 %} <span class="badge">{{ sidebar_unread }}</span>{% endif %}
+        </a>
+        <a href="{{ url_for('reminders.list_reminders') }}">
+            Reminder{% if sidebar_reminder > 0 %} <span class="badge">{{ sidebar_reminder }}</span>{% endif %}
+        </a>
         <a href="{{ url_for('chats.list_chats') }}">Chats</a>
         <a href="{{ url_for('customers.list_customers') }}">Customer</a>
         <a href="{{ url_for('products.list_products') }}">Products</a>
         <a href="{{ url_for('settings.index') }}">Settings</a>
     </nav>
+
 
     <!-- Main Content -->
     <main class="main">
@@ -38,24 +43,47 @@
 
         <!-- E-Mail Liste -->
         <div class="email-list">
-            {% if emails %}
-                {% for mail in emails %}
-                <div class="email-preview email-wide">
-                    <a href="{{ url_for('emails.view_email', email_id=mail['_id']) }}" class="email-link">
-                        <div class="email-header">
-                            <div>
-                                <strong>From:</strong> {{ mail["from"]["name"] }} &lt;{{ mail["from"]["email"] }}&gt;<br>
-                                <strong>To:</strong> {{ mail["to"]["name"] }} &lt;{{ mail["to"]["email"] }}&gt;<br>
-                                <strong>Subject:</strong> {{ mail["subject"] }}
-                            </div>
-                            <div class="email-timestamp">
-                                {{ mail["timestamp"] | datetimeformat }}
+            {% if grouped_emails %}
+                {% for section, mails in grouped_emails.items() %}
+                <div class="email-section">
+                    <h3 class="section-header" onclick="toggleSection('{{ loop.index }}')">
+                        {{ section }} ({{ mails|length }}) ▼
+                    </h3>
+                    <div id="section-{{ loop.index }}" class="section-content">
+                        {% for mail in mails %}
+                        <div class="email-row">
+                            <div class="email-preview email-wide {% if mail.unread %}unread{% else %}read{% endif %}">
+                                <a href="{{ url_for('emails.view_email', email_id=mail['_id']) }}" class="email-link">
+                                    <div class="email-header">
+                                        {% if mail.unread %}
+                                            <span class="red-dot"></span>
+                                        {% endif %}
+                                        <div>
+                                            <strong>From:</strong> {{ mail["from"]["name"] }} &lt;{{ mail["from"]["email"] }}&gt;<br>
+                                            <strong>To:</strong> {{ mail["to"]["name"] }} &lt;{{ mail["to"]["email"] }}&gt;<br>
+                                            <strong>Subject:</strong>
+                                            {% if mail.unread %}
+                                                <span class="red-subject">{{ mail["subject"] }}</span>
+                                            {% else %}
+                                                {{ mail["subject"] }}
+                                            {% endif %}
+                                        </div>
+                                        <div class="email-timestamp">
+                                            {% set weekday = mail["timestamp"].strftime('%a') %}
+                                            <span class="weekday">
+                                                {{ weekday[:2] if weekday != 'Th' else 'Th' }}
+                                            </span>
+                                            {{ mail["timestamp"] | datetimeformat }}
+                                        </div>
+                                    </div>
+                                    <div class="email-body">
+                                        {{ mail["message"][:300] }}{% if mail["message"]|length > 300 %}...{% endif %}
+                                    </div>
+                                </a>
                             </div>
                         </div>
-                        <div class="email-body">
-                             {{ mail["message"][:300] }}{% if mail["message"]|length > 300 %}...{% endif %}
-                        </div>
-                    </a>
+                        {% endfor %}
+                    </div>
                 </div>
                 {% endfor %}
             {% else %}
@@ -75,3 +103,13 @@
     </main>
 </body>
 </html>
+<script>
+function toggleSection(id) {
+    const content = document.getElementById("section-" + id);
+    if (content.style.display === "none") {
+        content.style.display = "block";
+    } else {
+        content.style.display = "none";
+    }
+}
+</script>

@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <title>Chat with {{ contact }} | Touchpoint.ai</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- QuillJS Editor -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <script src="{{ url_for('static', filename='js/editor.js') }}"></script>
 </head>
 <body>
     <header class="header">
@@ -15,69 +19,140 @@
 
     <nav class="sidebar">
         <a href="{{ url_for('index.index') }}">Home</a>
-        <a href="{{ url_for('emails.list_emails') }}">E-Mails</a>
-        <a href="{{ url_for('reminders.list_reminders') }}">Reminder</a>
+        <a href="{{ url_for('emails.list_emails') }}">
+            E-Mails{% if sidebar_unread > 0 %} <span class="badge">{{ sidebar_unread }}</span>{% endif %}
+        </a>
+        <a href="{{ url_for('reminders.list_reminders') }}">
+            Reminder{% if sidebar_reminder > 0 %} <span class="badge">{{ sidebar_reminder }}</span>{% endif %}
+        </a>
         <a href="{{ url_for('chats.list_chats') }}">Chats</a>
         <a href="{{ url_for('customers.list_customers') }}">Customer</a>
         <a href="{{ url_for('products.list_products') }}">Products</a>
         <a href="{{ url_for('settings.index') }}">Settings</a>
     </nav>
 
-    <main class="main chat-main">
-        <h2>Chat with {{ contact }}</h2>
+    <main class="main chat-main" style="display: flex;">
+        <!-- Linke Chat-Liste -->
+        <aside class="chat-list-sidebar">
+            <h3>Chats</h3>
+            <div class="chat-list-scroll">
+                {% for chat in chats %}
+                    <a href="{{ url_for('chats.view_chat', contact_email=chat.email) }}"
+                       class="chat-list-item {% if chat.email == contact %}active{% endif %}">
+                        <div class="chat-list-name">{{ chat.name }}</div>
+                        <div class="chat-list-email">{{ chat.email }}</div>
+                    </a>
+                {% endfor %}
+            </div>
+        </aside>
 
-        <!-- Scrollbarer Chat -->
-        <div class="chat-window" id="chat-window">
-            {% for msg in messages %}
-                <div class="chat-bubble {{ msg.direction }}">
-                    {{ msg.summary }}
-                </div>
-            {% endfor %}
-        </div>
+        <!-- Chat-Fenster -->
+        <section style="flex: 1;">
+            <h2>Chat with {{ contact }}</h2>
 
-        <!-- Textfeld + Button -->
-        <form method="POST" class="chat-input-container">
-            <textarea name="message" placeholder="Type your message..."></textarea>
-            <!-- Hidden field: ID der letzten E-Mail -->
-            <input type="hidden" name="email_id" value="{{ messages[-1].id }}">
-            <button type="submit" name="action" value="generate_email" class="ask-btn">
-                Answer this E-Mail
-            </button>
-        </form>
-        <!-- Response Box unterhalb der E-Mail -->
-        <div class="response-box" style="margin-top:1rem;">
-            {% if answer %}
-                <div class="email-preview email-wide" id="generated-preview">
-                    <div class="email-header">
-                        <div><strong>To:</strong> {{ answer.to }}</div>
-                        <div><strong>Subject:</strong> {{ answer.subject }}</div>
+            <!-- Scrollbarer Chat -->
+            <div class="chat-window" id="chat-window">
+                {% for msg in messages %}
+                    <div class="chat-bubble {{ msg.direction }}">
+                        {{ msg.summary }}
                     </div>
-                    <div class="email-body">
-                        {{ answer.body_text | replace('\n', '<br>') | safe }}
+                {% endfor %}
+            </div>
+
+            <!-- Textfeld + Button -->
+            <form method="POST" class="chat-input-container">
+                <textarea name="message" placeholder="Type your message...">{{ message_text }}</textarea>
+                <!-- Hidden field: ID der letzten E-Mail -->
+                <input type="hidden" name="email_id" value="{{ messages[-1].id }}">
+                <button type="submit" name="action" value="generate_email" class="ask-btn">
+                    Answer this E-Mail
+                </button>
+            </form>
+            <!-- Response Box unterhalb der E-Mail -->
+            <div class="response-box" style="margin-top:1rem;">
+                {% if answer %}
+                    <div class="email-preview email-wide" id="generated-preview">
+                        <div class="email-header">
+                            <div><strong>To:</strong> {{ answer.to }}</div>
+                            <div><strong>Subject:</strong> {{ answer.subject }}</div>
+                        </div>
+                        <div class="email-body">
+                            {{ answer.body_text | replace('\n', '<br>') | safe }}
+                        </div>
                     </div>
-                </div>
 
-                <!-- Hidden edit form -->
-                <form method="POST" id="edit-form" class="ask-ai-container" style="display:none; margin-top:1rem;">
-                    <textarea name="edited_message" id="edit-textarea">{{ answer.body_text }}</textarea>
-                    <input type="hidden" name="email_id" value="{{ answer.email_id }}">
-                    <button type="submit" name="action" value="rewrite_email" class="ask-btn">
-                        Rewrite
-                    </button>
-                </form>
+                    <!-- Hidden edit form -->
+                    <form method="POST" id="edit-form" class="ask-ai-container"
+                          style="display:none; margin-top:1rem;" enctype="multipart/form-data">
+                        <div class="form-row">
+                        <label>From:</label>
+                        <input type="email" name="from" value="{{ answer.from or 'janedoefenschmirtz@gmail.com' }}" required>
+                        </div>
+                        
+                        <!-- Empfänger -->
+                        <div class="form-row">
+                            <label>To:</label>
+                            <input type="email" name="to" value="{{ answer.to or contact }}" required>
+                            <span id="toggle-cc-bcc" class="toggle-link">+Cc / Bcc</span>
+                        </div>
 
-                <!-- Action Buttons -->
-                <div class="email-actions" style="margin-top:0.5rem;">
-                    <button type="button" id="edit-btn" class="ask-btn">✏ Edit</button>
-                    <form method="POST" style="display:inline;">
+                        <!-- CC / BCC ausklappbar -->
+                        <div id="cc-bcc-row" style="display:none;">
+                            <div class="form-row">
+                                <label>Cc:</label>
+                                <input type="email" name="cc" placeholder="optional">
+                            </div>
+                            <div class="form-row">
+                                <label>Bcc:</label>
+                                <input type="email" name="bcc" placeholder="optional">
+                            </div>
+                        </div>
+
+                        <!-- Betreff -->
+                        <div class="form-row">
+                            <label>Subject:</label>
+                            <input type="text" name="subject" value="{{ answer.subject }}" required>
+                        </div>
+
+                        <!-- Body mit WYSIWYG Editor -->
+                        <div id="editor">{{ answer.body_text|safe }}</div>
+
+                        <!-- Attachments -->
+                        <div class="form-row">
+                            <input type="file" name="attachments" multiple>
+                        </div>
+
+                        <!-- Hidden Email-ID -->
                         <input type="hidden" name="email_id" value="{{ answer.email_id }}">
-                        <button type="submit" name="action" value="send_email" class="ask-btn">
-                            📤 Send
+
+                        <!-- Save Button -->
+                        <button type="submit" name="action" value="rewrite_email" class="ask-btn">
+                            💾 Save Draft
+                        </button>
+                        <button type="submit" name="action" value="rewrite_email" class="ask-btn">
+                            ✨ Correct & Rewrite
+                        </button>
+                        <button type="submit" name="action" value="make_friendly" class="ask-btn">
+                            ✨ Friendly & Warm
+                        </button>
+                        <button type="submit" name="action" value="make_professional" class="ask-btn">
+                            ✨ Professional & Formal
                         </button>
                     </form>
-                </div>
-            {% endif %}
-        </div>
+
+                    <!-- Action Buttons -->
+                    <div class="email-actions" style="margin-top:0.5rem;">
+                        <button type="button" id="edit-btn" class="ask-btn">✏ Edit</button>
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="email_id" value="{{ answer.email_id }}">
+                            <button type="submit" name="action" value="send_email" class="ask-btn">
+                                📤 Send
+                            </button>
+                        </form>
+                    </div>
+                {% endif %}
+            </div>
+        </section>
     </main>
 
     <!-- Auto-scroll nach unten -->

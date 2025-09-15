@@ -16,15 +16,19 @@
     </header>
 
     <!-- Sidebar -->
-<nav class="sidebar">
-    <a href="{{ url_for('index.index') }}">Home</a>
-    <a href="{{ url_for('emails.list_emails') }}">E-Mails</a>
-    <a href="{{ url_for('reminders.list_reminders') }}">Reminder</a>
-    <a href="{{ url_for('chats.list_chats') }}">Chats</a>
-    <a href="{{ url_for('customers.list_customers') }}">Customer</a>
-    <a href="{{ url_for('products.list_products') }}">Products</a>
-    <a href="{{ url_for('settings.index') }}">Settings</a>
-</nav>
+    <nav class="sidebar">
+        <a href="{{ url_for('index.index') }}">Home</a>
+        <a href="{{ url_for('emails.list_emails') }}">
+            E-Mails{% if sidebar_unread > 0 %} <span class="badge">{{ sidebar_unread }}</span>{% endif %}
+        </a>
+        <a href="{{ url_for('reminders.list_reminders') }}">
+            Reminder{% if sidebar_reminder > 0 %} <span class="badge">{{ sidebar_reminder }}</span>{% endif %}
+        </a>
+        <a href="{{ url_for('chats.list_chats') }}">Chats</a>
+        <a href="{{ url_for('customers.list_customers') }}">Customer</a>
+        <a href="{{ url_for('products.list_products') }}">Products</a>
+        <a href="{{ url_for('settings.index') }}">Settings</a>
+    </nav>
 
     <!-- Main Content -->
     <main class="main">
@@ -35,76 +39,62 @@
             <input type="text" name="prompt" placeholder="Which customer hasn't responded to our new product yet?" required>
             <button type="submit" name="action" value="ask_ai" class="ask-btn">Ask</button>
         </form>
-        
-        <!-- Answer latest E-Mail-->
-         <form method="POST" class="ask-ai-container">
-            <button type="submit" name="action" value="answer_latest" class="ask-btn">Answer the latest E-Mail</button>
-        </form>
-
-
-        <!-- Initialize Email Dump -->
-        <form action="{{ url_for('index.init_dump') }}" method="post">
-            <button type="submit">Load new E-Mails</button>
-        </form>
-        <!-- Test Action Button -->
-        <form method="POST" action="{{ url_for('index.test_action') }}">
-            <button type="submit" class="ask-btn dev-btn">🚀 Testbutton</button>
-        </form>
 
         <!-- Response Box -->
         <div class="response-box">
             {% if answer %}
-                <div class="email-preview email-wide">
-                <div class="email-header">
-                <div><strong>To:</strong> {{ answer.to }}</div>
-                <div><strong>Subject:</strong> {{ answer.subject }}</div>
-                </div>
-                <div class="email-body">
-                    {{ answer.body_text | replace('\n', '<br>') | safe }}
-                </div>
-                </div>
-            {% else %}
-                <!-- Demo-Content -->
-                <div class="email-container">
-                    <!-- E-Mail 1 -->
-                    
-
-                    <!-- E-Mail 2 -->
-                    <div class="email-preview">
-                        <div class="email-header">
-                            <div><strong>To:</strong> max.mustermann@example.com</div>
-                            <div><strong>Betreff:</strong> Haben Sie unsere neueste Innovation schon gesehen?</div>
-                        </div>
-                        <div class="email-body">
-                            Hallo Max,<br><br>
-                            Wir freuen uns, Ihnen unser neuestes Produkt <strong>Touchpoint.ai</strong> vorzustellen.
-                            Entwickelt, um Ihre Kunden individuell und immer zum richtigen Zeitpunkt zu kontaktieren.<br><br>
-                            <a href="#" style="color: #800020;">👉 Mehr erfahren</a><br><br>
-                            Viele Grüße,<br>
-                            Ihr Touchpoint.ai Team
-                        </div>
-                    </div>
-
-                    <!-- E-Mail 3 -->
-                    <div class="email-preview email-wide">
-                        <div class="email-header">
-                            <div><strong>To:</strong> sarah.musiclover@example.com</div>
-                            <div><strong>Subject:</strong> Your favorite tunes + our newest product 🎶</div>
-                        </div>
-                        <div class="email-body">
-                            Hey Sarah,<br><br>
-                            How was the Linkin Park concert last weekend? Check out <strong>What I've done</strong>!
-                            It's my new app <strong>Touchpoint.ai</strong>!<br><br>
-                            It makes it easy to stay in contact with all the bands and venues you need to stay in touch with.
-                            This will make your life as a booking agent so much easier!<br><br>
-                            <a href="#" style="color: #800020;">👉 Discover it here</a><br><br>
-                            Cheers,<br>
-                            The Touchpoint.ai Team
-                        </div>
-                    </div>
+                <div class="answer-body">
+                    {{ answer | replace('\n', '<br>') | safe }}
                 </div>
             {% endif %}
         </div>
+
+
+<!-- KPI Dashboard Section -->
+<section class="kpi-dashboard">
+
+    <!-- Row 1 -->
+    <div class="kpi-row">
+        <div class="kpi-tile">
+            <h3>📧 Emails Sent</h3>
+            <p class="kpi-value">{{ kpis.emails_sent }}</p>
+            <p class="kpi-compare">vs. last week: {{ kpis.emails_sent_change }}%</p>
+        </div>
+        <div class="kpi-tile">
+            <h3>📥 Emails Received</h3>
+            <p class="kpi-value">{{ kpis.emails_received }}</p>
+            <p class="kpi-compare">vs. last week: {{ kpis.emails_received_change }}%</p>
+        </div>
+        <div class="kpi-tile highlight">
+            <h3>🎯 Free Replies Left</h3>
+            <p class="kpi-value">{{ kpis.free_replies_left }}</p>
+            <p class="kpi-compare">Resets daily</p>
+        </div>
+    </div>
+
+    <!-- Row 2 -->
+    <div class="kpi-row">
+        <div class="kpi-tile">
+            <h3>⏱ Avg. Response Time</h3>
+            <p class="kpi-value">{{ kpis.avg_response_time }} h</p>
+            <p class="kpi-compare">vs. last week: {{ kpis.avg_response_change }}%</p>
+        </div>
+        <div class="kpi-tile">
+            <h3>🏆 Top 5 Partners</h3>
+            <ol class="kpi-list">
+                {% for partner in kpis.top_partners %}
+                    <li>{{ partner }}</li>
+                {% endfor %}
+            </ol>
+        </div>
+        <div class="kpi-tile">
+            <h3>💎 Tokens Used</h3>
+            <p class="kpi-value">{{ kpis.tokens_used }}</p>
+            <p class="kpi-compare">vs. last week: {{ kpis.tokens_used_change }}%</p>
+        </div>
+    </div>
+
+</section>
     </main>
 </body>
 </html>

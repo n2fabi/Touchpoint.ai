@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ email.subject }} | Touchpoint.ai</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <!-- QuillJS Styles -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
 </head>
 <body>
     <!-- Header -->
@@ -18,8 +21,12 @@
     <!-- Sidebar -->
     <nav class="sidebar">
         <a href="{{ url_for('index.index') }}">Home</a>
-        <a href="{{ url_for('emails.list_emails') }}">E-Mails</a>
-        <a href="{{ url_for('reminders.list_reminders') }}">Reminder</a>
+        <a href="{{ url_for('emails.list_emails') }}">
+            E-Mails{% if sidebar_unread > 0 %} <span class="badge">{{ sidebar_unread }}</span>{% endif %}
+        </a>
+        <a href="{{ url_for('reminders.list_reminders') }}">
+            Reminder{% if sidebar_reminder > 0 %} <span class="badge">{{ sidebar_reminder }}</span>{% endif %}
+        </a>
         <a href="{{ url_for('chats.list_chats') }}">Chats</a>
         <a href="{{ url_for('customers.list_customers') }}">Customer</a>
         <a href="{{ url_for('products.list_products') }}">Products</a>
@@ -29,6 +36,7 @@
     <!-- Main Content -->
     <main class="main">
         <h2><span class="highlight">{{ email.subject }}</span></h2>
+
         <!-- E-Mail Detail -->
         <div class="email-detail" style="position: relative;">
             <p><strong>From:</strong> {{ email.from.name }} &lt;{{ email.from.email }}&gt;</p>
@@ -63,11 +71,65 @@
                 </div>
 
                 <!-- Hidden edit form -->
-                <form method="POST" id="edit-form" class="ask-ai-container" style="display:none; margin-top:1rem;">
-                    <textarea name="edited_message" id="edit-textarea">{{ answer.body_text }}</textarea>
+                <form method="POST" id="edit-form" class="ask-ai-container"
+                      style="display:none; margin-top:1rem;" enctype="multipart/form-data">
+
+                    <!-- Absender + Empfänger kompakt -->
+                    <div class="form-row">
+                    <label>From:</label>
+                    <input type="email" name="from" value="{{ answer.from or 'janedoefenschmirtz@gmail.com' }}" required>
+                    </div>
+
+                    <div class="form-row">
+                    <label>To:</label>
+                    <input type="email" name="to" value="{{ answer.to or 'janedoe@example.com' }}" required>
+                    <span id="toggle-cc-bcc" class="toggle-link">+Cc / Bcc</span>
+                    </div>
+
+                    <!-- CC / BCC ausklappbar -->
+                    <div id="cc-bcc-row" style="display:none;">
+                    <div class="form-row">
+                        <label>Cc:</label>
+                        <input type="email" name="cc" placeholder="optional">
+                    </div>
+                    <div class="form-row">
+                        <label>Bcc:</label>
+                        <input type="email" name="bcc" placeholder="optional">
+                    </div>
+                    </div>
+
+                    <!-- Betreff -->
+                    <div class="form-row">
+                    <label>Subject:</label>
+                    <input type="text" name="subject" value="{{ answer.subject }}" required>
+                    </div>
+
+                    <!-- Body mit WYSIWYG -->
+                    <div id="editor">{{ answer.body_text|safe }}</div>
+
+                    <!-- Attachments -->
+                    <div class="form-row">
+                        <input type="file" name="attachments" multiple>
+                    </div>
+
+                    <!-- Hidden Email-ID -->
                     <input type="hidden" name="email_id" value="{{ email.id }}">
+
+                    <!-- Save Button -->
                     <button type="submit" name="action" value="rewrite_email" class="ask-btn">
-                        Rewrite
+                        💾 Save Draft
+                    </button>
+
+                    <button type="submit" name="action" value="rewrite_email" class="ask-btn">
+                        ✨ Correct & Rewrite
+                    </button>
+
+                    <button type="submit" name="action" value="make_friendly" class="ask-btn">
+                        ✨ Friendly & Warm
+                    </button>
+
+                    <button type="submit" name="action" value="make_professional" class="ask-btn">
+                        ✨ Professional & Formal
                     </button>
                 </form>
 
@@ -89,20 +151,8 @@
         <a href="{{ url_for('emails.list_emails') }}" class="ask-btn back-btn">⬅ Back to Inbox</a>
     </main>
 
-    <script>
-        // toggle between preview and edit mode
-        document.addEventListener("DOMContentLoaded", () => {
-            const editBtn = document.getElementById("edit-btn");
-            const preview = document.getElementById("generated-preview");
-            const editForm = document.getElementById("edit-form");
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<script src="{{ url_for('static', filename='js/editor.js') }}"></script>
 
-            if(editBtn){
-                editBtn.addEventListener("click", () => {
-                    preview.style.display = "none";
-                    editForm.style.display = "block";
-                });
-            }
-        });
-    </script>
 </body>
 </html>

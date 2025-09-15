@@ -2,9 +2,13 @@ from flask import Blueprint, render_template, request, session, flash
 from bson.objectid import ObjectId
 from models import find_emails  # Mongo Helper
 from llm_functions import generate_reply_from_chat
-from mailfetcher import send_email
+from mailfetcher import generate_and_send_email
+from dotenv import load_dotenv
+import os
 
 chats_bp = Blueprint("chats", __name__, url_prefix="/chats")
+
+USER_EMAIL = os.getenv("USER_EMAIL")
 
 
 @chats_bp.route("/", methods=["GET"])
@@ -12,21 +16,20 @@ def list_chats():
     emails = find_emails({})
     emails = sorted(emails, key=lambda x: x.get("timestamp", 0), reverse=True)
 
-    my_email = "janedoefenschmirtz@gmail.com"
-
     chats = {}
     for mail in emails:
         contact = mail["from"]["email"]
 
         # Eigene Adresse überspringen
-        if contact == my_email:
+        if contact == USER_EMAIL:
             continue
 
         if contact not in chats:
             chats[contact] = {
                 "name": mail["from"].get("name", contact),
                 "email": contact,
-                "last_summary": mail.get("summary", mail.get("message", "")[:100])
+                "last_summary": mail.get("summary", mail.get("message", "")[:100]),
+                "last_timestamp": mail.get("timestamp")  # <-- hinzugefügt
             }
 
     return render_template("chats.html", chats=chats.values())
@@ -71,25 +74,29 @@ def view_chat(contact_email):
             session[f"answer_{contact_email}"] = answer
 
         elif action == "send_email":
-            if not answer:
-                print("Keine Antwort zum Senden!", "error")
-            else:
-                try:
-                    send_email(
-                        sender="janedoefenschmirtz@gmail.com",
-                        to=answer["to"],
-                        subject=answer["subject"],
-                        body_text=answer["body_text"]
-                    )
-                    print("E-Mail erfolgreich gesendet!", "success")
-                    session.pop(f"answer_{contact_email}", None)
-                except Exception as e:
-                    print(f"Fehler beim Senden: {str(e)}", "error")
+            generate_and_send_email(USER_EMAIL, answer)
+
+    # Chats-Liste für die Sidebar
+    all_emails = find_emails({})
+    chat_dict = {}
+    for mail in all_emails:
+        contact = mail["from"]["email"]
+        if contact == USER_EMAIL:
+            continue
+        if contact not in chat_dict:
+            chat_dict[contact] = {
+                "name": mail["from"].get("name", contact),
+                "email": contact,
+                "last_timestamp": mail.get("timestamp")
+            }
+    chats = list(chat_dict.values())
 
     return render_template(
         "chat_detail.html",
         contact=contact_email,
         messages=chat_messages,
-        answer=answer
+        answer=answer,
+        message_text=user_message if request.method == "POST" else "",
+        chats=chats
     )
 

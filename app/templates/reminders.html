@@ -18,8 +18,12 @@
     <!-- Sidebar -->
     <nav class="sidebar">
         <a href="{{ url_for('index.index') }}">Home</a>
-        <a href="{{ url_for('emails.list_emails') }}">E-Mails</a>
-        <a href="{{ url_for('reminders.list_reminders') }}">Reminder</a>
+        <a href="{{ url_for('emails.list_emails') }}">
+            E-Mails{% if sidebar_unread > 0 %} <span class="badge">{{ sidebar_unread }}</span>{% endif %}
+        </a>
+        <a href="{{ url_for('reminders.list_reminders') }}">
+            Reminder{% if sidebar_reminder > 0 %} <span class="badge">{{ sidebar_reminder }}</span>{% endif %}
+        </a>
         <a href="{{ url_for('chats.list_chats') }}">Chats</a>
         <a href="{{ url_for('customers.list_customers') }}">Customer</a>
         <a href="{{ url_for('products.list_products') }}">Products</a>
@@ -45,20 +49,32 @@
                 <h3>📩 Wartet auf Antwort</h3>
                 {% for r in waiting %}
                 <div class="email-preview email-wide">
-                    <a href="{{ url_for('reminders.reminder_detail', email_id=r.email_id) }}" class="email-link">
-                        <div class="email-header">
+                    <div class="email-header">
+                        <a href="{{ url_for('reminders.reminder_detail', email_id=r.email_id) }}" class="email-link">
                             <div>
                                 <strong>Last Messenger:</strong> {{ r.customer.name }} &lt;{{ r.customer.email }}&gt;<br>
                                 <strong>Subject:</strong> {{ r.subject }}
                             </div>
-                            <div class="email-timestamp">
-                                {{ r.timestamp | datetimeformat }}
-                            </div>
+                        </a>
+
+                        <form method="POST"
+                              action="{{ url_for('reminders.ignore_reminder', email_id=r.email_id) }}"
+                              class="ignore-form"
+                              style="display:inline;">
+                            <button type="submit" class="ask-btn">🚫</button>
+                        </form>
+
+                        <div class="email-timestamp">
+                            {% set weekday = r.timestamp.strftime('%a') %}
+                            <span class="weekday">
+                                {{ weekday[:2] if weekday != 'Th' else 'Th' }}
+                            </span>
+                            {{ r.timestamp | datetimeformat }}
                         </div>
-                        <div class="email-body">
-                            {{ r.preview[:300] }}{% if r.preview|length > 300 %}...{% endif %}
-                        </div>
-                    </a>
+                    </div>
+                    <div class="email-body">
+                        {{ r.preview[:300] }}{% if r.preview|length > 300 %}...{% endif %}
+                    </div>
                 </div>
                 {% endfor %}
             {% endif %}
@@ -70,10 +86,23 @@
                     <a href="{{ url_for('reminders.reminder_detail', email_id=r.email_id) }}" class="email-link">
                         <div class="email-header">
                             <div>
-                                <strong>Last Messenger:</strong> {{ r.customer.name }} &lt;{{ r.customer.email }}&gt;<br>
+                                <strong>Message to:</strong> {{ r.receiver }}<br>
                                 <strong>Subject:</strong> {{ r.subject }}
                             </div>
+
+
+                        <form method="POST"
+                              action="{{ url_for('reminders.ignore_reminder', email_id=r.email_id) }}"
+                              class="ignore-form"
+                              style="display:inline;">
+                            <button type="submit" class="ask-btn">🚫</button>
+                        </form>
+
                             <div class="email-timestamp">
+                                {% set weekday = r.timestamp.strftime('%a') %}
+                                <span class="weekday">
+                                    {{ weekday[:2] if weekday != 'Th' else 'Th' }}
+                                </span>
                                 {{ r.timestamp | datetimeformat }}
                             </div>
                         </div>
@@ -90,7 +119,6 @@
             {% endif %}
         </div>
 
-
         <!-- Pagination -->
         <div class="pagination">
             {% if page > 1 %}
@@ -101,5 +129,27 @@
             {% endif %}
         </div>
     </main>
+
+    <!-- Confirmation Script -->
+    <script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const forms = document.querySelectorAll(".ignore-form");
+        forms.forEach(form => {
+            form.addEventListener("submit", (e) => {
+                e.preventDefault();
+                if (confirm("Möchten Sie wirklich keine Reminder mehr zu dieser Nachricht erhalten?")) {
+                    fetch(form.action, {
+                        method: "POST",
+                        body: new FormData(form)
+                    }).then(res => {
+                        if (res.ok) {
+                            window.location.reload();
+                        }
+                    });
+                }
+            });
+        });
+    });
+    </script>
 </body>
 </html>

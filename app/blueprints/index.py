@@ -1,54 +1,161 @@
-from flask import Blueprint, render_template, request, redirect, url_for, current_app, flash
-from llm_functions import call_llm, generate_reply_for_email, process_incoming_email, preprocess_incoming_email
-from mailfetcher import fetch_and_store_raw_mails
-from models import get_latest_email_id, get_raw_mail_by_id, get_last_raw_mail_id
+from flask import Blueprint, render_template, request, current_app
+from llm_functions import call_llm
+from datetime import datetime, timedelta
+from bson.objectid import ObjectId
+import os
 
 index_bp = Blueprint(
     'index', __name__,
     template_folder='../templates'
 )
 
-def raw_mail_transform(msg_ids):
-    """Transform raw email data into a more usable format."""
-    for id in msg_ids:
-        process_incoming_email(preprocess_incoming_email(get_raw_mail_by_id(id).get('raw_message', '')))
-    
+USER_EMAIL = os.getenv("USER_EMAIL")
 
+
+# --- KPI Functions ---
+def get_emails_sent_stats(db):
+    now = datetime.utcnow()
+    start_this_week = now - timedelta(days=now.weekday())
+    start_last_week = start_this_week - timedelta(days=7)
+
+    # count sent mails (from me)
+    this_week = db.emails.count_documents({
+        "from.email": USER_EMAIL,
+        "timestamp": {"$gte": start_this_week, "$lt": now}
+    })
+    last_week = db.emails.count_documents({
+        "from.email": USER_EMAIL,
+        "timestamp": {"$gte": start_last_week, "$lt": start_this_week}
+    })
+
+    change = ((this_week - last_week) / last_week * 100) if last_week > 0 else None
+    return this_week, change
+
+
+def get_emails_received_stats(db):
+    now = datetime.utcnow()
+    start_this_week = now - timedelta(days=now.weekday())
+    start_last_week = start_this_week - timedelta(days=7)
+
+    this_week = db.emails.count_documents({
+        "to.email": USER_EMAIL,
+        "timestamp": {"$gte": start_this_week, "$lt": now}
+    })
+    last_week = db.emails.count_documents({
+        "to.email": USER_EMAIL,
+        "timestamp": {"$gte": start_last_week, "$lt": start_this_week}
+    })
+
+    change = ((this_week - last_week) / last_week * 100) if last_week > 0 else None
+    return this_week, change
+
+
+def get_avg_response_time(db):
+    """
+    Berechnet die durchschnittliche Antwortzeit (in Stunden).
+    Annahme: Antwort = eine E-Mail von USER_EMAIL auf eine letzte eingegangene Mail desselben Partners.
+    """
+    pipeline = [
+        {"$match": {"$or": [{"from.email": USER_EMAIL}, {"to.email": USER_EMAIL}]}},
+        {"$sort": {"timestamp": 1}},
+        {
+            "$group": {
+                "_id": {"partner": {"$cond": [
+                    {"$eq": ["$from.email", USER_EMAIL]}, "$to.email", "$from.email"
+                ]}},
+                "emails": {"$push": {"from": "$from.email", "to": "$to.email", "ts": "$timestamp"}}
+            }
+        }
+    ]
+    threads = list(db.emails.aggregate(pipeline))
+    response_times = []
+
+    for t in threads:
+        emails = t["emails"]
+        for i in range(1, len(emails)):
+            prev, curr = emails[i-1], emails[i]
+            if prev["to"] == USER_EMAIL and curr["from"] == USER_EMAIL:
+                delta = (curr["ts"] - prev["ts"]).total_seconds() / 3600
+                response_times.append(delta)
+
+    if not response_times:
+        return None, None
+
+    avg_this_week = sum(response_times) / len(response_times)
+
+    # todo: refine for "last week" vs "this week"
+    # For now: dummy comparison
+    return round(avg_this_week, 2), -10.0
+
+
+def get_top_partners(db, limit=5):
+    pipeline = [
+        {"$match": {"$or": [{"from.email": USER_EMAIL}, {"to.email": USER_EMAIL}]}},
+        {"$project": {
+            "partner": {"$cond": [
+                {"$eq": ["$from.email", USER_EMAIL]}, "$to.email", "$from.email"
+            ]}
+        }},
+        {"$group": {"_id": "$partner", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": limit}
+    ]
+    return [doc["_id"] for doc in db.emails.aggregate(pipeline)]
+
+
+def get_tokens_used_stats(db):
+    # Placeholder – du kannst hier dein Token-Tracking integrieren
+    now = datetime.utcnow()
+    start_this_week = now - timedelta(days=now.weekday())
+    start_last_week = start_this_week - timedelta(days=7)
+
+    # Annahme: du loggst Tokens in einer Collection "usage"
+    this_week = db.usage.count_documents({"timestamp": {"$gte": start_this_week, "$lt": now}})
+    last_week = db.usage.count_documents({"timestamp": {"$gte": start_last_week, "$lt": start_this_week}})
+
+    change = ((this_week - last_week) / last_week * 100) if last_week > 0 else None
+    return this_week, change
+
+
+def get_free_replies_left(user_id=None):
+    # Demo: Fixwert oder simple Daily Reset
+    DAILY_LIMIT = 5
+    # TODO: Zähle heutige Antworten aus DB (z. B. "actions" collection)
+    used_today = 2
+    return DAILY_LIMIT - used_today
+
+
+# --- ROUTE ---
 @index_bp.route("/", methods=["GET", "POST"])
 def index():
+    db = current_app.db
     answer = None
+
+    emails_sent, emails_sent_change = get_emails_sent_stats(db)
+    emails_received, emails_received_change = get_emails_received_stats(db)
+    avg_response, avg_response_change = get_avg_response_time(db)
+    top_partners = get_top_partners(db)
+    tokens_used, tokens_used_change = get_tokens_used_stats(db)
+    free_replies_left = get_free_replies_left()
+
+    kpis = {
+        "emails_sent": emails_sent,
+        "emails_sent_change": emails_sent_change,
+        "emails_received": emails_received,
+        "emails_received_change": emails_received_change,
+        "avg_response_time": avg_response,
+        "avg_response_change": avg_response_change,
+        "free_replies_left": free_replies_left,
+        "top_partners": top_partners,
+        "tokens_used": tokens_used,
+        "tokens_used_change": tokens_used_change
+    }
+
     if request.method == "POST":
         action = request.form.get("action")
         if action == "ask_ai":
             user_prompt = request.form.get("prompt")
             if user_prompt:
                 answer, token_info = call_llm(user_prompt)
-        elif action == "answer_latest":
-            print("Generating reply for latest email...")
-            latest_id = get_latest_email_id()
-            if latest_id:
-                answer = generate_reply_for_email(latest_id)
-            else:
-                answer = "No emails found in the database."
-            print(answer)
-    return render_template("index.html", answer=answer)
 
-
-
-@index_bp.route("/init_dump", methods=["POST"])
-def init_dump():
-    with current_app.app_context():
-        new_msgs = fetch_and_store_raw_mails(current_app)
-    flash("Initial email dump completed!")
-    raw_mail_transform(new_msgs)
-    flash("Raw emails transformed and processed.")
-    return redirect(url_for('index.index'))
-
-@index_bp.route("/test_action", methods=["POST"])
-def test_action():
-    """A test action to demonstrate functionality."""
-    print("Test action executed successfully!")
-    output = preprocess_incoming_email(get_raw_mail_by_id(get_last_raw_mail_id()).get('raw_message', ''))
-    output = process_incoming_email(output)
-    print(output)
-    return redirect(url_for('index.index'))
+    return render_template("index.html", answer=answer, kpis=kpis)

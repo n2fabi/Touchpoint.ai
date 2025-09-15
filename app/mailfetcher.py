@@ -4,9 +4,11 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from dotenv import load_dotenv
-from models import insert_raw_mail
+from models import insert_raw_mail, get_raw_mail_by_id
 import base64
 from email.mime.text import MIMEText
+from llm_functions import preprocess_incoming_email, process_incoming_email
+from flask import current_app
 
 # Load environment variables
 load_dotenv()
@@ -75,6 +77,16 @@ def label_as_processed(service, message_ids):
         }
     ).execute()
 
+def label_as_read(service, message_ids):
+    """Remove 'UNREAD' label to given Gmail message IDs."""
+    service.users().messages().batchModify(
+        userId='me',
+        body={
+            'ids': message_ids,
+            'removeLabelIds': ['UNREAD']
+        }
+    ).execute()
+
 def fetch_and_store_raw_mails(app):
     """Fetch unprocessed emails from Gmail and store in raw_mail DB."""
     service = get_gmail_service()
@@ -89,7 +101,6 @@ def fetch_and_store_raw_mails(app):
 
         messages = results.get('messages', [])
         if not messages:
-            print(f"No new emails found in {label}.")
             continue
 
         with app.app_context():
@@ -97,7 +108,9 @@ def fetch_and_store_raw_mails(app):
                 msg_data = service.users().messages().get(
                     userId='me', id=msg['id'], format='full'
                 ).execute()
-                insert_raw_mail(msg_data)
+                # Check unread status
+                label_ids = msg_data.get("labelIds", [])
+                insert_raw_mail(msg_data, labels=label_ids)
                 print(f"Inserted raw {label}-email {msg['id']} into DB.")
 
             # processed Label setzen
@@ -123,7 +136,36 @@ def send_email(sender, to, subject, body_text):
     message = create_message(sender, to, subject, body_text)
     sent_msg = service.users().messages().send(userId="me", body=message).execute()
     print(f"Email sent! Message ID: {sent_msg['id']}")
+    with current_app.app_context():
+        msg_id = fetch_and_store_raw_mails(current_app)
+    raw_mail_transform(msg_id)
     return sent_msg
+
+def raw_mail_transform(msg_ids):
+    """Transform raw email data into a more usable format."""
+    for id in msg_ids:
+        raw_doc = get_raw_mail_by_id(id)
+        raw_message = raw_doc.get("raw_message", {})
+        labels = raw_doc.get("labels", [])
+
+        email_data = preprocess_incoming_email(raw_message, labels, id)
+        process_incoming_email(email_data)
+
+def generate_and_send_email(user_email, answer):
+    """Generate and send an email based on logged in user and LLM answer."""
+    if not answer:
+                print("Keine Antwort zum Senden!")
+    else:
+        try:
+            send_email(
+                sender="janedoefenschmirtz@gmail.com",
+                to=answer["to"],
+                subject=answer["subject"],
+                body_text=answer["body_text"]
+            )
+            print("E-Mail erfolgreich gesendet!", "success")
+        except Exception as e:
+            print(f"Fehler beim Senden: {str(e)}", "error")
 
 
 if __name__ == "__main__":

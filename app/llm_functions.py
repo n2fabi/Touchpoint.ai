@@ -3,11 +3,12 @@ from dotenv import load_dotenv
 import os
 from openai import OpenAI
 import json
-from models import insert_email, get_email
+from models import insert_email, get_email, insert_llm_usage
 from datetime import datetime
 import base64
 from datetime import datetime
 from email.utils import parseaddr
+import inspect
 
 load_dotenv()
 
@@ -37,8 +38,11 @@ def call_llm(prompt):
     print(answer_text)
     return answer_text, usage_info
 
-def llm_json_response(prompt):
+def llm_json_response(prompt,purpose: str = None):
     """Fragt die OpenAI API und erzwingt strukturiertes JSON-Output."""
+    if purpose is None:
+        purpose = inspect.stack()[1].function
+
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     response = client.chat.completions.create(
@@ -51,33 +55,52 @@ def llm_json_response(prompt):
     usage_info = {
         "prompt_tokens": response.usage.prompt_tokens,
         "completion_tokens": response.usage.completion_tokens,
-        "total_tokens": response.usage.total_tokens
+        "total_tokens": response.usage.total_tokens,
+        "purpose": purpose  
     }
     model_used = response.model
     finish_reason = response.choices[0].finish_reason
 
     print(f"[OpenAI] Model: {model_used}, Finish: {finish_reason}, Usage: {usage_info}")
     print(answer_json)
+
+    insert_llm_usage(
+        user_id="jane_doe",  # Placeholder, später aus Session o.ä.
+        purpose=purpose,
+        prompt_tokens=usage_info["prompt_tokens"],
+        completion_tokens=usage_info["completion_tokens"],
+        tokens_used=usage_info["total_tokens"]
+    )
+
     return answer_json, usage_info
 
-
-def preprocess_incoming_email(raw_email_doc: dict):
+def preprocess_incoming_email(raw_email_doc: dict, labels: list, id: str = None):
     """
     Extract necessary fields (From, To, Subject, Body, Timestamp) from raw Gmail message dict.
     Decodes Base64 body content and handles multipart messages.
+    If no display name is found in From/To headers, use the part before '@' of the email.
     """
     payload = raw_email_doc.get("payload", {})
-    headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
+    headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
 
-    # Basic metadata
-    from_header = headers.get("From", "")
-    to_header = headers.get("To", "")
-    from_name, from_email = parseaddr(from_header)
-    to_name, to_email = parseaddr(to_header)
-    subject = headers.get("Subject", "")
+    # ---- Extract From / To ----
+    def safe_parse(header_value: str):
+        """Return (name, email) with fallback to local-part if name missing."""
+        name, email = parseaddr(header_value or "")
+        if not email:
+            return "", ""  # completely empty / malformed
+        if not name:
+            # fallback: take local-part (before '@')
+            local_part = email.split("@")[0]
+            name = local_part
+        return name, email
+
+    from_name, from_email = safe_parse(headers.get("from", ""))
+    to_name, to_email = safe_parse(headers.get("to", ""))
+
+    # ---- Other metadata ----
+    subject = headers.get("subject", "")
     internal_ts = raw_email_doc.get("internalDate")
-
-    # Timestamp from internalDate (ms since epoch)
     timestamp = datetime.utcfromtimestamp(int(internal_ts) / 1000) if internal_ts else None
 
     # ---- Extract message body ----
@@ -87,14 +110,12 @@ def preprocess_incoming_email(raw_email_doc: dict):
         return base64.urlsafe_b64decode(data.encode("utf-8")).decode("utf-8", errors="ignore")
 
     body_text = ""
-
     if "parts" in payload:  # Multipart message
         for part in payload["parts"]:
             mime_type = part.get("mimeType", "")
             data = part.get("body", {}).get("data", "")
             if mime_type == "text/plain":
                 body_text += decode_base64(data)
-
     else:
         # Single part message
         data = payload.get("body", {}).get("data", "")
@@ -108,7 +129,10 @@ def preprocess_incoming_email(raw_email_doc: dict):
         "subject": subject,
         "message_text": body_text.strip(),
         "timestamp": timestamp,
+        "unread": "UNREAD" in labels,
+        "raw_id": id
     }
+
 
 
 def process_incoming_email(input_dict: dict):
@@ -133,7 +157,7 @@ def process_incoming_email(input_dict: dict):
 
     Return a JSON in the following format:
     {{
-    "summary": "<summarize the message_text in a few sentences in the language of the email>",
+    "summary": "<rewrite message_text as a short chat-style message in the email's language>",
     "tone": {{
         "formality": "<for example: formal, informal, friendly, professional>",
         "phrases": "<for example: 'Best regards', 'Cheers', Hi', 'Dear'>,",
@@ -143,9 +167,6 @@ def process_incoming_email(input_dict: dict):
 
     # LLM-Aufruf (deine bestehende Funktion)
     llm_output, token_info = llm_json_response(prompt)
-
-    # Optional: Ausgabe flashen
-    flash(llm_output)
 
     # JSON aus LLM-Response parsen
     try:
@@ -165,6 +186,8 @@ def process_incoming_email(input_dict: dict):
         tone=parsed.get("tone", {}),
         phrases=parsed.get("phrases", ""),
         language=parsed.get("language", "English"),
+        unread=input_dict.get("unread", False),
+        raw_id=input_dict.get("raw_id"),
         timestamp=input_dict.get("timestamp")
     )
 
@@ -180,21 +203,16 @@ def generate_reply_for_email(email_id: str):
         raise ValueError("Email not found")
 
     prompt = f"""
-    You are an AI email assistant. Write a professional, personalized reply 
-    to the following email. You are Jane Doe, a sales representative.
-
-    Sender: {email_data['from']['name']} <{email_data['from']['email']}>
-    Message:
-    {email_data['message']}
-
+    You are an AI email assistant. Write a personalized reply 
+    to the following email. You are Jane Doe, a sales representative of TouchpointAI.
+    The email you are replying to has the following content and metadata:
+    Message: {email_data['message']}
     Tone: {email_data.get('tone', {}).get('formality', 'neutral')}
     Phrases: {email_data.get('tone', {}).get('phrases', '')}
     Language: {email_data.get('tone', {}).get('language', 'English')}
 
     Return the reply **only** as JSON in the following format:
     {{
-        "to": "{email_data['to']['name']} <{email_data['to']['email']}>",
-        "subject": "<Reply subject line>",
         "body_text": "<Formatted version of the reply, including any necessary context from the original email>",
     }}
     """
@@ -205,7 +223,9 @@ def generate_reply_for_email(email_id: str):
         parsed = json.loads(llm_output)
     except json.JSONDecodeError:
         raise ValueError("LLM output was not valid JSON")
-
+    parsed['to'] = f"{email_data['from']['email']}"
+    parsed['from'] = f"{email_data['to']['email']}"
+    parsed['subject'] = f"Re: {email_data.get('subject', 'No Subject')}"
     return parsed
 
 def generate_reminder_email(email_id: str):
@@ -219,18 +239,11 @@ def generate_reminder_email(email_id: str):
     prompt = f"""
     You are an AI assistant. I sent my client an email, but they haven't replied yet.
     Write a polite reminder email to follow up. This is the original email:
-    Subject: {email_data['subject']}
     Message:
     {email_data['message']}
-    
-    Tone: {email_data.get('tone', {}).get('formality', 'neutral')}
-    Phrases: {email_data.get('tone', {}).get('phrases', '')}
-    Language: {email_data.get('tone', {}).get('language', 'English')}
 
     Return the reminder email **only** as JSON in the following format:
     {{
-        "to": "{email_data['to']['name']} <{email_data['to']['email']}>",
-        "subject": "<Reminder subject line>",
         "body_text": "<Formatted version of the reminder email, including any necessary context from the original email>",
     }}
     """
@@ -241,7 +254,9 @@ def generate_reminder_email(email_id: str):
         parsed = json.loads(llm_output)
     except json.JSONDecodeError:
         raise ValueError("LLM output was not valid JSON")
-
+    parsed['to'] = f"{email_data['to']['email']}"
+    parsed['from'] = f"{email_data['from']['email']}"
+    parsed['subject'] = f"{email_data.get('subject', 'No Subject')}"
     return parsed
 
 def generate_reply_from_chat(email_id: str, chat):
@@ -255,9 +270,7 @@ def generate_reply_from_chat(email_id: str, chat):
     prompt = f"""
     You are an AI assistant. Reformulate this text to be a professional email: {chat}
     
-    The email you are replying to is:
-    Sender: {email_data['from']['name']} <{email_data['from']['email']}>
-    Message:
+    The email you are replying to has the following content and metadata:
     {email_data['message']}
     
     Tone: {email_data.get('tone', {}).get('formality', 'neutral')}
@@ -265,9 +278,7 @@ def generate_reply_from_chat(email_id: str, chat):
     Language: {email_data.get('tone', {}).get('language', 'English')}
     Return the reply **only** as JSON in the following format:
     {{
-        "to": "{email_data['to']['name']} <{email_data['to']['email']}>",
-        "subject": "<Reply subject line>",
-        "body_text": "<Formatted version of the reply, including any necessary context from the original email>",
+        "body_text": "<Formatted version of the reply, including any necessary context from the original email, prioritize the chat content, make sure all information from the chat is included>"
     }}
     """
     llm_output, token_info = llm_json_response(prompt)
@@ -275,7 +286,9 @@ def generate_reply_from_chat(email_id: str, chat):
         parsed = json.loads(llm_output)
     except json.JSONDecodeError:
         raise ValueError("LLM output was not valid JSON")
-
+    parsed['to'] = f"{email_data['from']['email']}"
+    parsed['from'] = f"{email_data['to']['email']}"
+    parsed['subject'] = f"Re: {email_data.get('subject', 'No Subject')}"
     return parsed
 
 def rewrite_email(email_id: str, edited_text: str):
@@ -287,22 +300,14 @@ def rewrite_email(email_id: str, edited_text: str):
         raise ValueError("Email not found")
 
     prompt = f"""
-    You are an AI assistant. Reformulate this text to be a professional email: {edited_text}
+    You are an AI assistant. 
+    Correct any mistakes in the following text but keep the formating and content: 
     
-    The email you are replying to is:
-    Sender: {email_data['from']['name']} <{email_data['from']['email']}>
-    Message:
-    {email_data['message']}
-    
-    Tone: {email_data.get('tone', {}).get('formality', 'neutral')}
-    Phrases: {email_data.get('tone', {}).get('phrases', '')}
-    Language: {email_data.get('tone', {}).get('language', 'English')}
+    {edited_text}
 
     Return the reply **only** as JSON in the following format:
     {{
-        "to": "{email_data['to']['name']} <{email_data['to']['email']}>",
-        "subject": "<Reply subject line>",
-        "body_text": "<Formatted version of the reply, including any necessary context from the original email>",
+        "body_text": "<The corrected and formatted version of the email reply>",
     }}
     """
 
@@ -313,4 +318,71 @@ def rewrite_email(email_id: str, edited_text: str):
     except json.JSONDecodeError:
         raise ValueError("LLM output was not valid JSON")
 
+    parsed['to'] = f"{email_data['from']['email']}"
+    parsed['from'] = f"{email_data['to']['email']}"
+    parsed['subject'] = f"Re: {email_data.get('subject', 'No Subject')}"
+    return parsed
+
+def friendlier_email(email_id: str, edited_text: str):
+    """
+    Takes user-edited text and reformulates it as a more friendly email reply.
+    """
+    email_data = get_email(email_id)
+    if not email_data:
+        raise ValueError("Email not found")
+
+    prompt = f"""
+    You are a friendly AI assistant. 
+    Make the following text more friendly and warm, but keep the formating and content: 
+    
+    {edited_text}
+
+    Return the reply **only** as JSON in the following format:
+    {{
+        "body_text": "<The corrected and formatted version of the email reply>",
+    }}
+    """
+
+    llm_output, token_info = llm_json_response(prompt)
+
+    try:
+        parsed = json.loads(llm_output)
+    except json.JSONDecodeError:
+        raise ValueError("LLM output was not valid JSON")
+
+    parsed['to'] = f"{email_data['from']['email']}"
+    parsed['from'] = f"{email_data['to']['email']}"
+    parsed['subject'] = f"Re: {email_data.get('subject', 'No Subject')}"
+    return parsed
+
+def professional_email(email_id: str, edited_text: str):
+    """
+    Takes user-edited text and reformulates it as a more professional email reply.
+    """
+    email_data = get_email(email_id)
+    if not email_data:
+        raise ValueError("Email not found")
+
+    prompt = f"""
+    You are a professional AI assistant. 
+    Make the following text more professional and formal, but keep the formating and content: 
+    
+    {edited_text}
+
+    Return the reply **only** as JSON in the following format:
+    {{
+        "body_text": "<The corrected and formatted version of the email reply>",
+    }}
+    """
+
+    llm_output, token_info = llm_json_response(prompt)
+
+    try:
+        parsed = json.loads(llm_output)
+    except json.JSONDecodeError:
+        raise ValueError("LLM output was not valid JSON")
+
+    parsed['to'] = f"{email_data['from']['email']}"
+    parsed['from'] = f"{email_data['to']['email']}"
+    parsed['subject'] = f"Re: {email_data.get('subject', 'No Subject')}"
     return parsed
