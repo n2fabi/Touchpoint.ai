@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Email | Touchpoint.ai</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+  <!-- TinyMCE von CDN laden -->
+  <script src="https://cdn.tiny.cloud/1/ztdrjev63uaeu9uv5j8if3cmesqidytk5ufapdslxeatvwmz/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+</head>
+<body>
+<header class="header">
+  <div class="logo">
+    <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Touchpoint.ai Logo" height="50">
+  </div>
+  <div class="user-icon">📧</div>
+</header>
+
+<nav class="sidebar">
+  <a href="{{ url_for('index.index') }}">Home</a>
+  <a href="{{ url_for('emails.list_emails') }}">E-Mails</a>
+  <a href="{{ url_for('reminders.list_reminders') }}">Reminder</a>
+  <a href="{{ url_for('chats.list_chats') }}">Chats</a>
+  <a href="{{ url_for('customers.list_customers') }}">Customer</a>
+  <a href="{{ url_for('products.index') }}">Products</a>
+  <a href="{{ url_for('settings.index') }}">Settings</a>
+</nav>
+
+<main class="main">
+  <h2><span class="highlight">✉ Create a New Email</span></h2>
+
+  <!-- Prompt Generator -->
+  <form method="POST" style="margin-bottom:1.5rem;">
+    <div class="prompt-row">
+      <textarea name="prompt" placeholder="Describe what the email should be about..." rows="3"></textarea>
+      <button type="submit" name="action" value="generate_from_prompt" class="ask-btn">
+        🤖 Generate from Prompt
+      </button>
+    </div>
+  </form>
+
+  <!-- Compose Email -->
+  <form method="POST" id="edit-form" enctype="multipart/form-data">
+    <div class="form-row">
+      <label for="from">From:</label>
+      <input type="email" id="from" name="from" value="{{ USER_EMAIL }}" required>
+    </div>
+
+    <div class="form-row">
+      <label for="to">To:</label>
+      <input type="email" id="to" name="to" placeholder="recipient@example.com" required>
+      <span id="toggle-cc-bcc" class="toggle-link">+Cc / Bcc</span>
+    </div>
+
+    <!-- CC / BCC -->
+    <div id="cc-bcc-row" style="display:none;">
+      <div class="form-row">
+        <label>Cc:</label>
+        <input type="email" name="cc" placeholder="optional">
+      </div>
+      <div class="form-row">
+        <label>Bcc:</label>
+        <input type="email" name="bcc" placeholder="optional">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label for="subject">Subject:</label>
+      <input type="text" id="subject" name="subject" placeholder="Subject" required>
+    </div>
+
+    <!-- TinyMCE Editor Feld -->
+    <!-- Important: textarea changed from quill to tinyMCE -->
+    <textarea id="editor" data-initial-content="{% if answer %}{{ answer.body_html|safe }}{% endif %}"></textarea>
+    <input type="hidden" name="body_html" id="body_html">
+
+
+    <!-- Attachments -->
+    <div class="form-row">
+      <input type="file" name="attachments" multiple>
+    </div>
+
+    <!-- Actions -->
+    <div class="email-actions" style="margin-top:0.5rem;">
+      <button type="submit" name="action" value="write_email" class="ask-btn">💾 Save Draft</button>
+      <button type="submit" name="action" value="send_email" class="ask-btn">📤 Send</button>
+      <button type="submit" name="action" value="make_friendly" class="ask-btn">✨ Friendly & Warm</button>
+      <button type="submit" name="action" value="make_professional" class="ask-btn">✨ Professional & Formal</button>
+      <button type="submit" name="action" value="rewrite_email" class="ask-btn">✨ Correct & Rewrite</button>
+    </div>
+  </form>
+</main>
+
+<script src="{{ url_for('static', filename='js/editor.js') }}"></script>
+</body>
+</html>

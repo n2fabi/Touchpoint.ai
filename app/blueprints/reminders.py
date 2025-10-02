@@ -1,12 +1,12 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timedelta
-from flask import current_app, Blueprint, render_template, request, session, flash
+from flask import current_app, Blueprint, render_template, request, session, redirect, url_for
 from pymongo import DESCENDING
 from dotenv import load_dotenv
 import os
-from llm_functions import generate_reminder_email, generate_reply_for_email
+from llm_functions import generate_reminder_email, generate_reply_for_email, rewrite_email, friendlier_email, professional_email
 from bson.objectid import ObjectId
-from mailfetcher import send_email
+from mailfetcher import generate_and_send_email
 from background_tasks import sidebar_cache, get_reminders_list
 from models import mark_email_ignored
 
@@ -58,7 +58,7 @@ def ignore_reminder(email_id):
     # Letzte Nachricht dieses Chats markieren
     mark_email_ignored(email_id)
     # Redirect zurück zur Übersicht
-    return ("", 204)
+    return redirect(url_for('reminders.list_reminders'))
 
 
 @reminders_bp.route("/<email_id>", methods=["GET", "POST"])
@@ -83,7 +83,8 @@ def reminder_detail(email_id):
 
     if request.method == "POST":
         if action == "answer_email":
-            answer = generate_reply_for_email(email_id)
+            use_rag = request.form.get("use_rag") == "1"
+            answer = generate_reply_for_email(email_id, use_rag=use_rag)
             session[f"answer_{email_id}"] = answer
 
         elif action == "generate_reminder_email":
@@ -92,9 +93,19 @@ def reminder_detail(email_id):
 
         elif action == "rewrite_email":
             edited_text = request.form.get("edited_message")
-            # Use your rewrite logic (adapt as needed)
-            answer = generate_reminder_email(email_id, edited_text)
+            answer = rewrite_email(email_id, edited_text)
             session[f"answer_{email_id}"] = answer
+
+        elif action == "make_friendly":
+            edited_text = request.form.get("edited_message")
+            answer = friendlier_email(email_id, edited_text)
+            session[f"answer_{email_id}"] = answer
+
+        elif action == "make_professional":
+            edited_text = request.form.get("edited_message")
+            answer = professional_email(email_id, edited_text)
+            session[f"answer_{email_id}"] = answer
+            print("E-Mail erfolgreich professionell umgeschrieben!", "success")
 
         elif action == "send_email":
             generate_and_send_email(USER_EMAIL, answer)

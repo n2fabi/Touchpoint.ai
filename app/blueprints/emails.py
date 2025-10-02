@@ -1,7 +1,7 @@
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, redirect, url_for
 from bson.objectid import ObjectId
-from models import find_emails, mark_email_read  # deine Mongo-Verbindung
-from llm_functions import generate_reply_for_email, rewrite_email, friendlier_email, professional_email
+from models import find_emails, mark_email_read, get_last_incoming_email_id
+from llm_functions import generate_reply_for_email, rewrite_email, friendlier_email, professional_email, generate_email_from_prompt
 from mailfetcher import generate_and_send_email, label_as_read, get_gmail_service  # Funktion zum Senden von E-Mails
 from flask import session, current_app
 import os
@@ -23,13 +23,13 @@ def group_emails_by_date(emails):
         mail_date = ts.date()
 
         if mail_date == today:
-            key = "Heute"
+            key = "Today"
         elif mail_date == today - timedelta(days=1):
-            key = "Gestern"
+            key = "Yesterday"
         elif mail_date.isocalendar()[1] == today.isocalendar()[1] and mail_date.year == today.year:
-            key = "Diese Woche"
+            key = "This Week"
         elif mail_date.month == today.month and mail_date.year == today.year:
-            key = "Diesen Monat"
+            key = "This Month"
         else:
             key = f"{calendar.month_name[mail_date.month]} {mail_date.year}"
 
@@ -37,7 +37,7 @@ def group_emails_by_date(emails):
 
     # Reihenfolge festlegen
     ordered = {}
-    for section in ["Heute", "Gestern", "Diese Woche", "Diesen Monat"]:
+    for section in ["Today", "Yesterday", "This Week", "This Month"]:
         if section in grouped:
             ordered[section] = sorted(grouped[section], key=lambda m: m["timestamp"], reverse=True)
 
@@ -128,7 +128,8 @@ def view_email(email_id):
         action = request.form.get("action")
 
         if action == "answer_email":
-            answer = generate_reply_for_email(email_id)
+            use_rag = request.form.get("use_rag") == "1"
+            answer = generate_reply_for_email(email_id, use_rag=use_rag)
             session[f"answer_{email_id}"] = answer
 
         elif action == "rewrite_email":
@@ -151,3 +152,53 @@ def view_email(email_id):
             generate_and_send_email(USER_EMAIL, answer)
 
     return render_template("email_detail.html", email=email, answer=answer)
+
+@emails_bp.route("/delete/<email_id>", methods=["POST"])
+def delete_email(email_id):
+    db = current_app.db
+    db.emails.delete_one({"_id": ObjectId(email_id)})
+    db.raw_emails.delete_one({"email_id": email_id})
+    return redirect(url_for('emails.list_emails'))
+
+
+
+
+
+@emails_bp.route("/new_email", methods=["GET", "POST"])
+def new_email():
+    answer = None
+
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        if action == "write_email":
+            # Normale Email-Eingabe (User schreibt selbst)
+            answer = {
+                "from": request.form.get("from") or USER_EMAIL,
+                "to": request.form.get("to"),
+                "subject": request.form.get("subject"),
+                "body_html": request.form.get("body_html"),
+            }
+
+        elif action == "generate_from_prompt":
+            # LLM generiert Email aus Prompt
+            prompt_text = request.form.get("prompt")
+            email_reciever = request.form.get("to")
+            email_id = None
+            if email_reciever != None:
+                email_id = get_last_incoming_email_id(email_reciever)
+            answer = generate_email_from_prompt(prompt_text, email_id)
+            
+
+        elif action == "send_email":
+            # Antwort aus hidden fields
+            email_data = {
+                "from": request.form.get("from"),
+                "to": request.form.get("to"),
+                "subject": request.form.get("subject"),
+                "body_html": request.form.get("body_html"),
+            }
+            generate_and_send_email(USER_EMAIL, email_data)
+            return redirect(url_for("emails.list_emails"))
+
+    return render_template("new_email.html", answer=answer)

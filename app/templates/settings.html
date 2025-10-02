@@ -5,6 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Touchpoint.ai - Settings</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .settings-form {
+            max-width: 600px;
+            margin-top: 1rem;
+        }
+        .form-row {
+            margin-bottom: 1rem;
+        }
+        .form-row label {
+            display: block;
+            font-weight: bold;
+        }
+        .placeholder-box {
+            background: #f0f0f0;
+            color: #888;
+            padding: 1rem;
+            border: 1px dashed #ccc;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+        }
+    </style>
 </head>
 <body>
     <!-- Header -->
@@ -26,21 +47,55 @@
         </a>
         <a href="{{ url_for('chats.list_chats') }}">Chats</a>
         <a href="{{ url_for('customers.list_customers') }}">Customer</a>
-        <a href="{{ url_for('products.list_products') }}">Products</a>
+        <a href="{{ url_for('products.index') }}">Products</a>
         <a href="{{ url_for('settings.index') }}">Settings</a>
     </nav>
-
 
     <!-- Main Content -->
     <main class="main">
         <h2>⚙️ Einstellungen</h2>
-        <p>Hier kannst du deine Einstellungen anpassen. (Platzhalter)</p>
-            <!-- Initialize Email Dump -->
-        <form action="{{ url_for('settings.init_dump') }}" method="post">
-            <button type="submit">Dump and reload all emails.</button>
+
+        <!-- Settings Form -->
+        <form method="POST" class="settings-form">
+            <!-- Email Signature -->
+            <div class="form-row">
+                <label for="email_signature">E-Mail Signatur:</label>
+                <textarea id="email_signature" name="email_signature" rows="3" style="width:100%;">{{ email_signature }}</textarea>
+            </div>
+
+            <!-- Formatting Style -->
+            <div class="form-row">
+                <label for="formatting_style">Formatting Style:</label>
+                <select id="formatting_style" name="formatting_style">
+                    <option value="default" {% if formatting_style == "default" %}selected{% endif %}>Default</option>
+                    <option value="comic" {% if formatting_style == "comic" %}selected{% endif %}>Comic Sans</option>
+                    <option value="rainbow" {% if formatting_style == "rainbow" %}selected{% endif %}>Rainbow Sentences</option>
+                    <option value="minimal" {% if formatting_style == "minimal" %}selected{% endif %}>Minimal</option>
+                </select>
+            </div>
+
+            <!-- Reminder Days -->
+            <div class="form-row">
+                <label for="reminder_days">Tage bis Reminder angezeigt werden:</label>
+                <input type="number" id="reminder_days" name="reminder_days" min="1" max="30" value="{{ reminder_days }}">
+            </div>
+
+            <!-- Placeholder for future options -->
+            <div class="placeholder-box">
+                Weitere Einstellungsideen:<br>
+                – Dark Mode / Theme Switcher<br>
+                – API Keys verwalten<br>
+                – E-Mail Ordner auswählen<br>
+                – Notification Settings<br>
+            </div>
+
+            <button type="submit" class="ask-btn">💾 Save Settings</button>
+        </form>
+
+        <!-- Initialize Email Dump -->
+        <form action="{{ url_for('settings.init_dump') }}" method="post" style="margin-top:2rem;">
+            <button type="submit">Dump and reload all emails</button>
         </form>
     </main>
-
-
 </body>
 </html>

@@ -9,6 +9,8 @@ import base64
 from email.mime.text import MIMEText
 from llm_functions import preprocess_incoming_email, process_incoming_email
 from flask import current_app
+from bs4 import BeautifulSoup
+from email.mime.multipart import MIMEMultipart
 
 # Load environment variables
 load_dotenv()
@@ -120,20 +122,35 @@ def fetch_and_store_raw_mails(app):
 
     return all_msg_ids
 
+def html_to_plaintext(html: str) -> str:
+    """Convert HTML to clean plain text for email fallback."""
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text(separator="\n")  # behält Absätze
+    return text.strip()
 
-def create_message(sender, to, subject, body_text):
-    """Create a MIMEText email and encode it in base64url."""
-    message = MIMEText(body_text, "plain", "utf-8")
+def create_message(sender, to, subject, body_html):
+    """Create a MIME email with HTML + plaintext fallback."""
+    body_text = html_to_plaintext(body_html)
+
+    message = MIMEMultipart("alternative")
     message["to"] = to
     message["from"] = sender
     message["subject"] = subject
+
+    # Plaintext (Fallback) + HTML
+    part1 = MIMEText(body_text, "plain", "utf-8")
+    part2 = MIMEText(body_html, "html", "utf-8")
+
+    message.attach(part1)
+    message.attach(part2)
+
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
     return {"raw": raw}
 
-def send_email(sender, to, subject, body_text):
+def send_email(sender, to, subject, body_html):
     """Send an email using the Gmail API."""
     service = get_gmail_service()
-    message = create_message(sender, to, subject, body_text)
+    message = create_message(sender, to, subject, body_html)
     sent_msg = service.users().messages().send(userId="me", body=message).execute()
     print(f"Email sent! Message ID: {sent_msg['id']}")
     with current_app.app_context():
@@ -161,7 +178,7 @@ def generate_and_send_email(user_email, answer):
                 sender="janedoefenschmirtz@gmail.com",
                 to=answer["to"],
                 subject=answer["subject"],
-                body_text=answer["body_text"]
+                body_html=answer["body_html"]
             )
             print("E-Mail erfolgreich gesendet!", "success")
         except Exception as e:

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Touchpoint.ai - Products</title>
+    <title>Products | Touchpoint.ai</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -12,7 +12,7 @@
         <div class="logo">
             <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Touchpoint.ai Logo" height="50">
         </div>
-        <div class="user-icon">👤</div>
+        <div class="user-icon">📦</div>
     </header>
 
     <!-- Sidebar -->
@@ -26,15 +26,51 @@
         </a>
         <a href="{{ url_for('chats.list_chats') }}">Chats</a>
         <a href="{{ url_for('customers.list_customers') }}">Customer</a>
-        <a href="{{ url_for('products.list_products') }}">Products</a>
+        <a href="{{ url_for('products.index') }}">Products</a>
         <a href="{{ url_for('settings.index') }}">Settings</a>
     </nav>
 
-
     <!-- Main Content -->
     <main class="main">
-        <h2>📦 Produktübersicht</h2>
-        <p>Hier erscheinen deine Produkte. (Platzhalter)</p>
+        <h2><span class="highlight">Products</span></h2>
+
+        <!-- Upload Section -->
+        <section>
+            <h3>Upload product JSON</h3>
+            <form method="post" action="{{ url_for('products.upload_product') }}" enctype="multipart/form-data" class="ask-ai-container">
+                <input type="file" name="file" accept=".json">
+                <button type="submit" class="ask-btn">Upload JSON</button>
+            </form>
+
+            <p>Or paste JSON:</p>
+            <form method="post" action="{{ url_for('products.upload_product') }}">
+                <textarea name="json_text" rows="8" style="width:100%"></textarea>
+                <button type="submit" class="ask-btn">Save JSON</button>
+            </form>
+        </section>
+
+        <!-- Stored Products -->
+        <section style="margin-top:20px;">
+            <h3>Stored Products</h3>
+            <ul>
+            {% for p in products %}
+                <li>
+                    <strong>{{ p.title or p.raw.get("title","(no title)") }}</strong>
+                    &nbsp; ({{ p.id }})
+                    <form style="display:inline;" method="post" action="{{ url_for('products.index_into_rag', product_id=p.id) }}">
+                        <button type="submit" class="ask-btn">Index into RAG</button>
+                    </form>
+                </li>
+            {% else %}
+                <li>No products yet.</li>
+            {% endfor %}
+            </ul>
+        </section>
+
+        <!-- RAG Chat -->
+        <section style="margin-top:20px;">
+            <a href="{{ url_for('products.rag_chat') }}" class="ask-btn">Open RAG Chat</a>
+        </section>
     </main>
 </body>
 </html>

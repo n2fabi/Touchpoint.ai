@@ -1,78 +1,26 @@
 from flask import flash
 from dotenv import load_dotenv
-import os
-from openai import OpenAI
 import json
 from models import insert_email, get_email, insert_llm_usage
 from datetime import datetime
 import base64
 from datetime import datetime
 from email.utils import parseaddr
-import inspect
+from llm_calls import llm_json_response
+from agentic_rag import agentic_answer
+from filters import normalize_html_for_editor
 
 load_dotenv()
+formatting = ":"
+
+# formatting = """. Use the following HTML styling rules when formatting the reply:  
+#             - Wrap every sentence in a <span> element.  
+#             - Each <span> should have a rainbow color applied in order (red, orange, yellow, green, blue, indigo, violet).  
+#             - Cycle the colors if there are more sentences than colors.  
+#             - Use the font family "Comic Sans MS", cursive, sans-serif for all text.  
+#             - Add extra line breaks between sentences for a playful look.  """
 
 
-def call_llm(prompt):
-    """Fragt die OpenAI API mit dem gegebenen Prompt."""
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=300
-    )
-
-    # Extrahieren, was wir brauchen
-    answer_text = response.choices[0].message.content
-    usage_info = {
-        "prompt_tokens": response.usage.prompt_tokens,
-        "completion_tokens": response.usage.completion_tokens,
-        "total_tokens": response.usage.total_tokens
-    }
-    model_used = response.model
-    finish_reason = response.choices[0].finish_reason
-
-    # Optional ins Log
-    print(f"[OpenAI] Model: {model_used}, Finish: {finish_reason}, Usage: {usage_info}")
-    print(answer_text)
-    return answer_text, usage_info
-
-def llm_json_response(prompt,purpose: str = None):
-    """Fragt die OpenAI API und erzwingt strukturiertes JSON-Output."""
-    if purpose is None:
-        purpose = inspect.stack()[1].function
-
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"}  # Enforce JSON output
-    )
-
-    answer_json = response.choices[0].message.content
-    usage_info = {
-        "prompt_tokens": response.usage.prompt_tokens,
-        "completion_tokens": response.usage.completion_tokens,
-        "total_tokens": response.usage.total_tokens,
-        "purpose": purpose  
-    }
-    model_used = response.model
-    finish_reason = response.choices[0].finish_reason
-
-    print(f"[OpenAI] Model: {model_used}, Finish: {finish_reason}, Usage: {usage_info}")
-    print(answer_json)
-
-    insert_llm_usage(
-        user_id="jane_doe",  # Placeholder, später aus Session o.ä.
-        purpose=purpose,
-        prompt_tokens=usage_info["prompt_tokens"],
-        completion_tokens=usage_info["completion_tokens"],
-        tokens_used=usage_info["total_tokens"]
-    )
-
-    return answer_json, usage_info
 
 def preprocess_incoming_email(raw_email_doc: dict, labels: list, id: str = None):
     """
@@ -194,13 +142,19 @@ def process_incoming_email(input_dict: dict):
     return parsed
 
 
-def generate_reply_for_email(email_id: str):
+def generate_reply_for_email(email_id: str, use_rag=False, formatting = formatting):
     """
     Fetches an email from the DB and generates a reply as JSON.
     """
     email_data = get_email(email_id)
     if not email_data:
         raise ValueError("Email not found")
+    
+    # Optional RAG context
+    rag_context = ""
+
+    if use_rag:
+        rag_context = agentic_answer(email_data['message'])
 
     prompt = f"""
     You are an AI email assistant. Write a personalized reply 
@@ -211,9 +165,12 @@ def generate_reply_for_email(email_id: str):
     Phrases: {email_data.get('tone', {}).get('phrases', '')}
     Language: {email_data.get('tone', {}).get('language', 'English')}
 
-    Return the reply **only** as JSON in the following format:
+    {('Relevant context from product knowledge base:' + rag_context) if use_rag and rag_context else ''}
+
+
+    Return the reply as **only** JSON formated as html{formatting}
     {{
-        "body_text": "<Formatted version of the reply, including any necessary context from the original email>",
+        "body_html": "<Formatted version of the reply, including any necessary context from the original email>",
     }}
     """
 
@@ -242,9 +199,9 @@ def generate_reminder_email(email_id: str):
     Message:
     {email_data['message']}
 
-    Return the reminder email **only** as JSON in the following format:
+    Return the reply as **only** JSON formated as html:
     {{
-        "body_text": "<Formatted version of the reminder email, including any necessary context from the original email>",
+        "body_html": "<Formatted version of the reply, including any necessary context from the original email>",
     }}
     """
 
@@ -259,13 +216,19 @@ def generate_reminder_email(email_id: str):
     parsed['subject'] = f"{email_data.get('subject', 'No Subject')}"
     return parsed
 
-def generate_reply_from_chat(email_id: str, chat):
+def generate_reply_from_chat(email_id: str, chat, use_rag=False):
     """
     Generates a reply for an email based on a chat.
     """
     email_data = get_email(email_id)
     if not email_data:
         raise ValueError("Email not found")
+    
+        # Optional RAG context
+    rag_context = ""
+
+    if use_rag:
+        rag_context = agentic_answer(email_data['message'])
 
     prompt = f"""
     You are an AI assistant. Reformulate this text to be a professional email: {chat}
@@ -276,9 +239,13 @@ def generate_reply_from_chat(email_id: str, chat):
     Tone: {email_data.get('tone', {}).get('formality', 'neutral')}
     Phrases: {email_data.get('tone', {}).get('phrases', '')}
     Language: {email_data.get('tone', {}).get('language', 'English')}
-    Return the reply **only** as JSON in the following format:
+
+
+    {('Relevant context from product knowledge base:' + rag_context) if use_rag and rag_context else ''}
+
+    Return the reply as **only** JSON formated as html:
     {{
-        "body_text": "<Formatted version of the reply, including any necessary context from the original email, prioritize the chat content, make sure all information from the chat is included>"
+        "body_html": "<Formatted version of the reply, including any necessary context from the original email, prioritize the chat content, make sure all information from the chat is included>"
     }}
     """
     llm_output, token_info = llm_json_response(prompt)
@@ -305,9 +272,9 @@ def rewrite_email(email_id: str, edited_text: str):
     
     {edited_text}
 
-    Return the reply **only** as JSON in the following format:
+    Return the reply as **only** JSON formated as html:
     {{
-        "body_text": "<The corrected and formatted version of the email reply>",
+        "body_html": "<The corrected and formatted version of the email reply>",
     }}
     """
 
@@ -337,9 +304,9 @@ def friendlier_email(email_id: str, edited_text: str):
     
     {edited_text}
 
-    Return the reply **only** as JSON in the following format:
+    Return the reply as **only** JSON formated as html:
     {{
-        "body_text": "<The corrected and formatted version of the email reply>",
+        "body_html": "<The corrected and formatted version of the email reply>",
     }}
     """
 
@@ -369,9 +336,9 @@ def professional_email(email_id: str, edited_text: str):
     
     {edited_text}
 
-    Return the reply **only** as JSON in the following format:
+    Return the reply as **only** JSON formated as html:
     {{
-        "body_text": "<The corrected and formatted version of the email reply>",
+        "body_html": "<The corrected and formatted version of the email reply>",
     }}
     """
 
@@ -385,4 +352,97 @@ def professional_email(email_id: str, edited_text: str):
     parsed['to'] = f"{email_data['from']['email']}"
     parsed['from'] = f"{email_data['to']['email']}"
     parsed['subject'] = f"Re: {email_data.get('subject', 'No Subject')}"
+    return parsed
+
+def email_with_rag(email_id: str, edited_text: str):
+    """
+    Takes user-edited text and reformulates it as an email reply with RAG (Retrieval-Augmented Generation).
+    """
+    email_data = get_email(email_id)
+    if not email_data:
+        raise ValueError("Email not found")
+
+    prompt = f"""
+    You are an AI assistant. Use RAG to enhance the following text and format it as an email reply:
+
+    {edited_text}
+
+    Return the reply as **only** JSON formated as html:
+    {{
+        "body_html": "<The enhanced and formatted version of the email reply>",
+    }}
+    """
+
+    llm_output, token_info = llm_json_response(prompt)
+
+    try:
+        parsed = json.loads(llm_output)
+    except json.JSONDecodeError:
+        raise ValueError("LLM output was not valid JSON")
+
+    parsed['to'] = f"{email_data['from']['email']}"
+    parsed['from'] = f"{email_data['to']['email']}"
+    parsed['subject'] = f"Re: {email_data.get('subject', 'No Subject')}"
+    return parsed
+
+def generate_email_from_prompt(email_prompt, email_id: str,  use_rag=False):
+    """
+    Generates a reply for an email based on a chat.
+    """
+    if email_id != None:
+        email_data = get_email(email_id)
+        if not email_data:
+            raise ValueError("Email not found")
+
+        # Optional RAG context
+    rag_context = ""
+
+    if use_rag:
+        rag_context = agentic_answer(email_data['message'])
+
+
+
+    # Optionaler Block: Metadaten der letzten E-Mail
+    if email_id is not None:
+        last_email_meta = f"""
+        The last email I received has the following metadata. Try to match those.
+
+        Tone: {email_data.get('tone', {}).get('formality', 'neutral')}
+        Phrases: {email_data.get('tone', {}).get('phrases', '')}
+        Language: {email_data.get('tone', {}).get('language', 'English')}
+        """
+    else:
+        last_email_meta = ""
+
+    # Optionaler Block: RAG-Kontext
+    rag_block = f"Relevant context from product knowledge base: {rag_context}" if use_rag and rag_context else ""
+
+    # Finales Prompt zusammensetzen
+    prompt = f"""
+    You are an AI assistant. Write a professional email based on this prompt: {email_prompt}
+
+    {last_email_meta}
+
+    {rag_block}
+
+    Return the reply as **only** JSON formatted as html:
+    {{
+        "body_html": "<Formatted version of the reply, including any necessary context from the original email, prioritize the chat content, make sure all information from the chat is included>"
+    }}
+    """
+
+    llm_output, token_info = llm_json_response(prompt)
+    try:
+        parsed = json.loads(llm_output)
+    except json.JSONDecodeError:
+        raise ValueError("LLM output was not valid JSON")
+    if email_id != None:
+        parsed['to'] = f"{email_data['from']['email']}"
+        parsed['from'] = f"{email_data['to']['email']}"
+        parsed['subject'] = f"Re: {email_data.get('subject', 'No Subject')}"
+
+    # HTML normalisieren für TinyMCE
+    if "body_html" in parsed:
+        print(parsed["body_html"])
+        parsed["body_html"] = normalize_html_for_editor(parsed["body_html"])
     return parsed

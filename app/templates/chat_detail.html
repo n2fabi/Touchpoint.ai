@@ -27,16 +27,16 @@
         </a>
         <a href="{{ url_for('chats.list_chats') }}">Chats</a>
         <a href="{{ url_for('customers.list_customers') }}">Customer</a>
-        <a href="{{ url_for('products.list_products') }}">Products</a>
+        <a href="{{ url_for('products.index') }}">Products</a>
         <a href="{{ url_for('settings.index') }}">Settings</a>
     </nav>
 
     <main class="main chat-main" style="display: flex;">
         <!-- Linke Chat-Liste -->
         <aside class="chat-list-sidebar">
-            <h3>Chats</h3>
+            <h2>Chats</h2>
             <div class="chat-list-scroll">
-                {% for chat in chats %}
+                {% for chat in chats |reverse %}
                     <a href="{{ url_for('chats.view_chat', contact_email=chat.email) }}"
                        class="chat-list-item {% if chat.email == contact %}active{% endif %}">
                         <div class="chat-list-name">{{ chat.name }}</div>
@@ -54,7 +54,9 @@
             <div class="chat-window" id="chat-window">
                 {% for msg in messages %}
                     <div class="chat-bubble {{ msg.direction }}">
-                        {{ msg.summary }}
+                        <a href="{{ url_for('emails.view_email', email_id=msg.id) }}" class="email-link">
+                            {{ msg.summary }}
+                        </a>
                     </div>
                 {% endfor %}
             </div>
@@ -67,9 +69,13 @@
                 <button type="submit" name="action" value="generate_email" class="ask-btn">
                     Answer this E-Mail
                 </button>
+                <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <input type="checkbox" name="use_rag" value="1">
+                    Use RAG
+                </label>
             </form>
             <!-- Response Box unterhalb der E-Mail -->
-            <div class="response-box" style="margin-top:1rem;">
+            <div class="response-box" >
                 {% if answer %}
                     <div class="email-preview email-wide" id="generated-preview">
                         <div class="email-header">
@@ -77,7 +83,7 @@
                             <div><strong>Subject:</strong> {{ answer.subject }}</div>
                         </div>
                         <div class="email-body">
-                            {{ answer.body_text | replace('\n', '<br>') | safe }}
+                            {{ answer.body_html | safe }}
                         </div>
                     </div>
 
@@ -115,7 +121,7 @@
                         </div>
 
                         <!-- Body mit WYSIWYG Editor -->
-                        <div id="editor">{{ answer.body_text|safe }}</div>
+                        <div id="editor">{{ answer.body_html|safe }}</div>
 
                         <!-- Attachments -->
                         <div class="form-row">
@@ -123,7 +129,7 @@
                         </div>
 
                         <!-- Hidden Email-ID -->
-                        <input type="hidden" name="email_id" value="{{ answer.email_id }}">
+                        <input type="hidden" name="email_id" value="{{ messages[-1].id }}">
 
                         <!-- Save Button -->
                         <button type="submit" name="action" value="rewrite_email" class="ask-btn">
@@ -144,7 +150,7 @@
                     <div class="email-actions" style="margin-top:0.5rem;">
                         <button type="button" id="edit-btn" class="ask-btn">✏ Edit</button>
                         <form method="POST" style="display:inline;">
-                            <input type="hidden" name="email_id" value="{{ answer.email_id }}">
+                            <input type="hidden" name="email_id" value="{{ messages[-1].id }}">
                             <button type="submit" name="action" value="send_email" class="ask-btn">
                                 📤 Send
                             </button>

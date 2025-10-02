@@ -64,7 +64,8 @@ def view_chat(contact_email):
         user_message = request.form.get("message", "")
 
         if action == "generate_email":
-            answer = generate_reply_from_chat(email_id, user_message)
+            use_rag = request.form.get("use_rag") == "1"
+            answer = generate_reply_from_chat(email_id, user_message,use_rag = use_rag)
             session[f"answer_{contact_email}"] = answer
 
         elif action == "rewrite_email":

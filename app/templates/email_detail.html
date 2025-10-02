@@ -29,7 +29,7 @@
         </a>
         <a href="{{ url_for('chats.list_chats') }}">Chats</a>
         <a href="{{ url_for('customers.list_customers') }}">Customer</a>
-        <a href="{{ url_for('products.list_products') }}">Products</a>
+        <a href="{{ url_for('products.index') }}">Products</a>
         <a href="{{ url_for('settings.index') }}">Settings</a>
     </nav>
 
@@ -50,9 +50,16 @@
             <!-- Answer this Email Button -->
             <form method="POST" class="ask-ai-container" style="margin-top: 1rem;">
                 <input type="hidden" name="email_id" value="{{ email.id }}">
+
+
+                
                 <button type="submit" name="action" value="answer_email" class="ask-btn">
                     Answer this E-Mail
                 </button>
+                <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <input type="checkbox" name="use_rag" value="1">
+                    Use Product Knowledge (RAG)
+                </label>
             </form>
         </div>
 
@@ -66,7 +73,7 @@
                         <div><strong>Subject:</strong> {{ answer.subject }}</div>
                     </div>
                     <div class="email-body">
-                        {{ answer.body_text | replace('\n', '<br>') | safe }}
+                        {{ answer.body_html | safe }}
                     </div>
                 </div>
 
@@ -105,7 +112,7 @@
                     </div>
 
                     <!-- Body mit WYSIWYG -->
-                    <div id="editor">{{ answer.body_text|safe }}</div>
+                    <div id="editor">{{ answer.body_html|safe }}</div>
 
                     <!-- Attachments -->
                     <div class="form-row">

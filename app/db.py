@@ -1,12 +1,13 @@
-from flask import g
+import os
 from flask_pymongo import PyMongo
-from config import Config
 
 mongo = PyMongo()
 
-
 def init_db(app):
     """Initialize PyMongo and attach the client/DB to app context."""
-    print("MongoDB initialized with URI:", Config.MONGO_URI, flush=True)
-    mongo.init_app(app, uri=Config.MONGO_URI)
+    # Lese die MongoDB URI aus der Umgebung (.env oder Docker-Umgebung)
+    mongo_uri = os.environ.get("MONGO_URI", "mongodb://localhost:27017/crm_db")
+    print("MongoDB initialized with URI:", mongo_uri, flush=True)
+    
+    mongo.init_app(app, uri=mongo_uri)
     app.db = mongo.db

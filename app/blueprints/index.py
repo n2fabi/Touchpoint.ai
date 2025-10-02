@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, current_app
-from llm_functions import call_llm
+from llm_calls import call_llm
 from datetime import datetime, timedelta
 from bson.objectid import ObjectId
 import os
@@ -159,3 +159,7 @@ def index():
                 answer, token_info = call_llm(user_prompt)
 
     return render_template("index.html", answer=answer, kpis=kpis)
+
+@index_bp.route("/_health")
+def health():
+    return "ok", 200

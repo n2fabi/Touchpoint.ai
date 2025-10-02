@@ -7,6 +7,10 @@ from dotenv import load_dotenv
 import os
 from flask import Blueprint
 from datetime import timedelta
+import time
+from pymongo.errors import ServerSelectionTimeoutError
+
+
 
 load_dotenv()
 
@@ -19,6 +23,42 @@ sidebar_cache = {
 }
 
 USER_EMAIL = os.getenv("USER_EMAIL")
+
+def get_db(app, retries=5, delay=2):
+    """Versucht mehrfach, die MongoDB-Verbindung herzustellen."""
+    for _ in range(retries):
+        try:
+            return app.db
+        except ServerSelectionTimeoutError:
+            print("MongoDB noch nicht bereit, warte...", flush=True)
+            time.sleep(delay)
+    raise Exception("MongoDB nicht erreichbar nach mehreren Versuchen")
+
+def safe_refresh_emails(app):
+    try:
+        with app.app_context():
+            db = get_db(app)
+            sidebar_cache["unread_count"] = db.emails.count_documents({"unread": True})
+            sidebar_cache["last_update"] = datetime.utcnow()
+    except Exception as e:
+        print("Error in refresh_emails:", e, flush=True)
+
+def safe_refresh_reminders(app):
+    try:
+        with app.app_context():
+            db = get_db(app)
+            sidebar_cache["reminders_count"] = len(get_reminders_list(db, days=1))
+    except Exception as e:
+        print("Error in refresh_reminders:", e, flush=True)
+
+def safe_load_and_transform_raw_mails(app):
+    try:
+        with app.app_context():
+            db = get_db(app)
+            msg_ids = fetch_and_store_raw_mails(app)
+            raw_mail_transform(msg_ids)
+    except Exception as e:
+        print("Error in load_and_transform_raw_mails:", e, flush=True)
 
 def load_and_transform_raw_mails(app):
     """Rohdaten aus raw_mail DB holen und transformieren."""
@@ -134,12 +174,17 @@ def refresh_sidebar_cache(app):
         sidebar_cache["reminders_count"] = len(get_reminders_list(db, days=1))
         sidebar_cache["last_update"] = datetime.utcnow()
 
+from apscheduler.schedulers.background import BackgroundScheduler
+
 def init_background(app):
     """Scheduler starten und Jobs registrieren."""
     scheduler = BackgroundScheduler()
-    scheduler.add_job(lambda: refresh_emails(app), "interval", seconds=5, id="refresh_emails")
-    scheduler.add_job(lambda: refresh_reminders(app), "interval", seconds=5, id="refresh_reminders")
-    scheduler.add_job(lambda: load_and_transform_raw_mails(app), "interval", minutes=2, id="load_and_transform_raw_mails")
-    scheduler.start()
 
-    
+    # Intervalle etwas großzügiger setzen
+    scheduler.add_job(lambda: safe_refresh_emails(app), "interval", seconds=10, id="refresh_emails")
+    scheduler.add_job(lambda: safe_refresh_reminders(app), "interval", seconds=10, id="refresh_reminders")
+    scheduler.add_job(lambda: safe_load_and_transform_raw_mails(app), "interval", minutes=2, id="load_and_transform_raw_mails")
+
+    scheduler.start()
+    print("Background scheduler gestartet.", flush=True)
+

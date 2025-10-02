@@ -26,7 +26,7 @@
         </a>
         <a href="{{ url_for('chats.list_chats') }}">Chats</a>
         <a href="{{ url_for('customers.list_customers') }}">Customer</a>
-        <a href="{{ url_for('products.list_products') }}">Products</a>
+        <a href="{{ url_for('products.index') }}">Products</a>
         <a href="{{ url_for('settings.index') }}">Settings</a>
     </nav>
 
@@ -46,8 +46,9 @@
             {% set follow_up = reminders | selectattr("reason", "equalto", "follow_up") | list %}
 
             {% if waiting %}
-                <h3>📩 Wartet auf Antwort</h3>
+                <h3>📩 Waiting for reply</h3>
                 {% for r in waiting %}
+                <div class="email-wrapper">
                 <div class="email-preview email-wide">
                     <div class="email-header">
                         <a href="{{ url_for('reminders.reminder_detail', email_id=r.email_id) }}" class="email-link">
@@ -56,13 +57,6 @@
                                 <strong>Subject:</strong> {{ r.subject }}
                             </div>
                         </a>
-
-                        <form method="POST"
-                              action="{{ url_for('reminders.ignore_reminder', email_id=r.email_id) }}"
-                              class="ignore-form"
-                              style="display:inline;">
-                            <button type="submit" class="ask-btn">🚫</button>
-                        </form>
 
                         <div class="email-timestamp">
                             {% set weekday = r.timestamp.strftime('%a') %}
@@ -75,28 +69,28 @@
                     <div class="email-body">
                         {{ r.preview[:300] }}{% if r.preview|length > 300 %}...{% endif %}
                     </div>
+                </div> 
+                <div class="ignore_btn">
+                    <form method="POST"
+                        action="{{ url_for('reminders.ignore_reminder', email_id=r.email_id) }}" onsubmit="return confirm('Do you want to ignore reminders for this email?');">
+                        <button type="submit">🚫</button>
+                    </form>
+                </div>
                 </div>
                 {% endfor %}
             {% endif %}
 
             {% if follow_up %}
-                <h3>⏳ Nochmal nachhaken</h3>
+                <h3>⏳ Needs follow-up</h3>
                 {% for r in follow_up %}
-                <div class="email-preview email-wide">
-                    <a href="{{ url_for('reminders.reminder_detail', email_id=r.email_id) }}" class="email-link">
-                        <div class="email-header">
-                            <div>
-                                <strong>Message to:</strong> {{ r.receiver }}<br>
+                    <div class="email-wrapper">
+                        <div class="email-preview email-wide">
+                            <a href="{{ url_for('reminders.reminder_detail', email_id=r.email_id) }}" class="email-link">
+                                <div class="email-header">
+                                    <div>
+                                        <strong>Message to:</strong> {{ r.receiver }}<br>
                                 <strong>Subject:</strong> {{ r.subject }}
                             </div>
-
-
-                        <form method="POST"
-                              action="{{ url_for('reminders.ignore_reminder', email_id=r.email_id) }}"
-                              class="ignore-form"
-                              style="display:inline;">
-                            <button type="submit" class="ask-btn">🚫</button>
-                        </form>
 
                             <div class="email-timestamp">
                                 {% set weekday = r.timestamp.strftime('%a') %}
@@ -110,6 +104,13 @@
                             {{ r.preview[:300] }}{% if r.preview|length > 300 %}...{% endif %}
                         </div>
                     </a>
+                </div>
+                <div class="ignore_btn">
+                    <form method="POST"
+                        action="{{ url_for('reminders.ignore_reminder', email_id=r.email_id) }}">
+                        <button type="submit">🚫</button>
+                    </form>
+                </div>
                 </div>
                 {% endfor %}
             {% endif %}

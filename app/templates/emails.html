@@ -26,21 +26,26 @@
         </a>
         <a href="{{ url_for('chats.list_chats') }}">Chats</a>
         <a href="{{ url_for('customers.list_customers') }}">Customer</a>
-        <a href="{{ url_for('products.list_products') }}">Products</a>
+        <a href="{{ url_for('products.index') }}">Products</a>
         <a href="{{ url_for('settings.index') }}">Settings</a>
     </nav>
 
 
     <!-- Main Content -->
     <main class="main">
-        <h2><span class="highlight">E-Mail Postfach</span></h2>
+        <h2><span class="highlight">E-Mails</span></h2>
 
         <!-- Suche -->
         <form method="get" action="{{ url_for('emails.list_emails') }}" class="ask-ai-container">
             <input type="text" name="q" value="{{ search_term }}" placeholder="Search emails...">
             <button type="submit" class="ask-btn">Search</button>
         </form>
-
+        <!-- Neue E-Mail schreiben -->
+        <div style="margin: 1rem 0;">
+            <a href="{{ url_for('emails.new_email') }}" class="ask-btn">
+                ✏ Write new email
+            </a>
+        </div>
         <!-- E-Mail Liste -->
         <div class="email-list">
             {% if grouped_emails %}
@@ -80,6 +85,11 @@
                                         {{ mail["message"][:300] }}{% if mail["message"]|length > 300 %}...{% endif %}
                                     </div>
                                 </a>
+                            </div>
+                            <div class="delete_btn">
+                                <form method="POST" action="{{ url_for('emails.delete_email', email_id=mail['_id']) }}" onsubmit="return confirm('Do you want to delete this email from Touchpoint?');">
+                                    <button type="submit">🗑️</button>
+                                </form>
                             </div>
                         </div>
                         {% endfor %}

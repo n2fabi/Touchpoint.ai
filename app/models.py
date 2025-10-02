@@ -2,6 +2,12 @@
 from bson import ObjectId
 from flask import current_app
 from datetime import datetime
+from pymongo import DESCENDING
+
+USER_EMAIL = "janedoefenschmirtz@gmail.com"
+
+
+
 
 # ---- Customers ----
 def find_customers(filter_q={}, limit=100):
@@ -67,6 +73,14 @@ def mark_email_ignored(email_id):
         {"_id": ObjectId(email_id)},
         {"$set": {"touchpoint_ignored": True}}
     )
+
+def get_last_incoming_email_id(partner_email):
+    db = current_app.db
+    mail = db.emails.find_one(
+        {"from.email": partner_email, "to.email": USER_EMAIL},
+        sort=[("timestamp", DESCENDING)]
+    )
+    return mail["_id"] if mail else None
 
 
 # ---- raw_mail ----
