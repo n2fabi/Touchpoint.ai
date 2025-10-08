@@ -1,186 +1,129 @@
 # Touchpoint.ai
 
-A lightweight CRM leveraging AI to stay in contact with customers and create customer‑centric introductions to new products
-
-# Lightweight CRM with LLM Support — MVP
-
-**Summary:** This repository contains a minimal Flask web app as an MVP for a lightweight CRM with LLM support. The targeted product-driven scenario is: new product → filter relevant customers → generate a personalized email draft (or bullet points) → mark customer as “contacted” → send a reminder after 3 working days if no reply.
+Lightweight, AI-assisted CRM for **email replies**, **follow-up reminders**, **chat**, and **product knowledge via RAG** (Retrieval-Augmented Generation).
 
 ---
 
-## Repository contents
+## Overview
 
-* `app/` — Flask application (Blueprints: customers, products, interactions, llm, email, scheduler)
-* `scripts/` — helper scripts (e.g. `seed_data.py`)
-* `requirements.txt` — Python dependencies
-* `Dockerfile` — (optional) container build
-* `README.md` — this file
-
----
-
-## MVP features (scope for 2 weeks / 40 h)
-
-* Customers CRUD (CSV/JSON import possible)
-* Create products (description + markers)
-* LLM pipeline: marker extraction + matching + email draft / bullet points
-* Review UI for email draft + send button (sets `last_contacted`)
-* Reminder job: checks 3 **working days** after `last_contacted` and sends/creates a reminder if no `replied` interaction exists
-* SMTP-based sending (mailbox integration later)
+- **Email Assistant**: Generate, rewrite, and edit HTML emails (TinyMCE). Optional **RAG** toggle to ground answers in product knowledge.
+- **Reminders & Threads**: Auto-group conversations per contact and flag **needs reply** / **follow up**.
+- **RAG Knowledge Base**: Upload/edit product docs (free text + compact JSON facts), **index into ChromaDB**, reset vector DB, delete products.
+- **Agentic RAG**: Question decomposition + **HyDE** pseudo answers → combined search (question + HyDE) with **MMR** → concise, source-grounded replies.
 
 ---
 
-## Recommended tech stack
+## Core Features
 
-* Backend: **Flask**
-* DB: **MongoDB** (Atlas or local)
-* DB driver: **PyMongo** / Flask-PyMongo
-* LLM: OpenAI (or another provider API)
-* Background / scheduler: **APScheduler** (MVP), later Celery + Redis
-* Email: SMTP (`smtplib`) for MVP; Gmail IMAP/OAuth later
+- **Email**
+  - Reply generation with tone controls (friendly/professional/correct & rewrite)
+  - “New Email”: generate from prompt or compose manually (HTML)
+  - CC/BCC toggle, attachments, send draft
+
+- **RAG KB**
+  - Product upload (JSON): `{ title, description, info, synonyms, images }`
+  - Edit product (title/description/JSON facts/synonyms/images)
+  - **Index into RAG** (OpenAI embeddings + ChromaDB)
+  - **Reset Vector DB** and **Delete Product** (Mongo + RAG)
+
+- **Agentic RAG (QA)**
+  - Decompose → HyDE → Dual search (question+HyDE) → **MMR** diversify → answer from context
+  - “No information found.” when not grounded
 
 ---
 
-## Prerequisites
+## Tech Stack
 
-* Python 3.10+ or 3.11
-* MongoDB (local or Atlas)
-* OpenAI API key (or another LLM key)
+- **Flask** (Python 3.11), **MongoDB**, **ChromaDB (HTTP)**
+- **OpenAI** embeddings (`text-embedding-3-small`)
+- **TinyMCE** HTML editor
+- Gmail (read/label); app send for outgoing mail
 
 ---
 
-## Environment variables (example)
+## Setup
 
-```bash
-# Flask
+### Environment (minimal)
+bash
 FLASK_APP=app
 FLASK_ENV=development
-
-# MongoDB
-MONGO_URI=mongodb://localhost:27017/crm_db
-
-# LLM / OpenAI
-OPENAI_API_KEY=sk-...
-
-# SMTP (optional) — only for sending in MVP
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USERNAME=your@address
-SMTP_PASSWORD=secret
-
-# Other (deployment-specific)
 SECRET_KEY=changeme
-```
 
----
+MONGO_URI=mongodb://localhost:27017/touchpoint
 
-## Installation & start (local)
+OPENAI_API_KEY=sk-...
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 
-```bash
-git clone <repo-url>
-cd <repo>
+CHROMA_HOST=chroma   # or localhost
+CHROMA_PORT=8000
+
+USER_EMAIL=you@example.com
+Install & Run
+bash
+Code kopieren
 python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-.venv\\Scripts\\activate     # Windows
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# Optional: seed the DB
-python scripts/seed_data.py
+# Start Chroma (example)
+docker run -p 8000:8000 chromadb/chroma:latest
 
-# Start
+# Run the app
 flask run --host=0.0.0.0 --port=5000
-```
+Using the App
+Products (RAG)
+Upload JSON or paste (includes title, description, info, optional synonyms, images).
 
----
+Edit: adjust description & facts.
 
-## Important endpoints (overview)
+Index into RAG: creates embeddings + Mongo chunk mirror.
 
-> The implementation is organized in the `app/` folder using Blueprints.
+Reset Vector DB: clears Chroma collection.
 
-* `GET /customers` — list customers
-* `POST /customers` — create a customer (JSON)
-* `GET /customers/<id>` — customer details + interactions
-* `GET /products` — list products
-* `POST /products` — create a product (description, markers)
-* `POST /products/<id>/match` — LLM: find relevant customers & generate draft
-* `POST /interactions` — store a new interaction (email/call)
-* `POST /send_email` — send an email (SMTP) and set `last_contacted`
+Delete: removes product from Mongo + RAG.
 
----
+Tip: Chroma metadata must be scalar. Store synonyms as a comma-separated string; the app normalizes this for metadata.
 
-## Data model (example documents)
+Emails
+Inbox: grouped by day/week; red dot for unread.
 
-**customers**
+Detail: “Answer this E-Mail” → optional Use Product Knowledge (RAG) → HTML preview → edit in TinyMCE → tone controls → send.
 
-```json
-{
-  "_id": "ObjectId",
-  "name": "Acme GmbH",
-  "email": "kontakt@acme.de",
-  "tags": ["fintech", "DACH"],
-  "notes": ["2025-07-01: Messekontakt"],
-  "meta": {"timezone":"Europe/Berlin"},
-  "last_contacted": null
-}
-```
+New Email: generate from prompt or compose manually (HTML).
 
-**products**
+RAG Ingestion (Best Practices)
+Description: natural paragraphs; keep factual and concise.
 
-```json
-{
-  "_id": "ObjectId",
-  "title": "Produkt X",
-  "description": "Long description...",
-  "markers": ["AI","Automation"],
-  "created_at": "ISODate"
-}
-```
+JSON facts: compact keys/values (e.g., price: "1.559 €", config.tom1: "08 x 07").
 
-**interactions**
+Synonyms: put variations (brand/model/aliases) as a comma-separated list (stored as metadata string).
 
-```json
-{
-  "_id": "ObjectId",
-  "customer_id": "ObjectId",
-  "type": "email",
-  "direction": "outgoing",
-  "content": "...",
-  "timestamp": "ISODate",
-  "status": "sent|replied|no_reply"
-}
-```
+The pipeline produces short deterministic fact sentences (e.g., Touchpoint.ai price is 49 €/seat.) and embeds them with the description.
 
----
+Agentic RAG Flow
+Decompose user question into atomic sub-questions.
 
-## Architecture & notes
+HyDE: generate pseudo answers for each sub-question.
 
-* **LLM pipeline:** Keep input tokens small: only include the last 3 interactions + tags + short customer info in the prompt. Use `temperature=0.2-0.6` for controlled creativity.
-* **Matching:** Start with keyword/tag filters (indexed in Mongo); later move to semantic matching with embeddings + vector DB.
-* **Reminder:** APScheduler checks DB entries regularly; the job worker should be idempotent.
+Combined Search: query with question and HyDE; MMR to diversify.
 
----
+Answer strictly from retrieved context; otherwise: “No information found.”
 
-## Development organization (recommendation)
+Maintenance
+Reset Vector DB: one-click collection drop & recreate.
 
-Use an issue board with the following epics/issues for the sprint:
+Delete Product: remove from Mongo (products, product_chunks) and Chroma.
 
-1. Repo + basic skeleton
-2. DB + seed script
-3. Customers CRUD
-4. Products CRUD
-5. LLM integration (prompts + tests)
-6. Matching & draft UI
-7. Email sending + mark contacted
-8. Scheduler / reminder
-9. Docs + deploy
+Roadmap (short)
+Multi-user auth/roles
 
----
+UI to review/edit RAG chunks inline
 
-## ToDo / roadmap (after MVP)
+Async ingestion (Celery/Redis) & batch validators
 
-* Mailbox integration (IMAP/Gmail OAuth) for automatic capture of replies
-* Embeddings + vector DB for semantic matching
-* Multi-user, auth, roles
-* Asynchronous workers (Celery) + scalable deployment
-* Tests (unit + e2e)
+Retrieval/answer evaluation dashboards
 
----
+makefile
+Code kopieren
+
+::contentReference[oaicite:0]{index=0}
